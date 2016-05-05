@@ -18,91 +18,79 @@
 #include <Ethernet.h>
 #include <EEPROM.h>
 #include <InfluxDB.h>
+#include <UdpLogger.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-/**
-* Solar boiler control
-*
-* This sketch controls a solar heat collector system with two boilers and after heater connected to the central heating furnace.
-* This sketch also controls the solar pump, the hot water recycle pump and pushes data to the cloud.
-*
-* Setup
-* The Arduino is using two onewire channels for the temperature sensors. The  sensor addresses are hardcoded. There are four relays in use: two relays
-* are for the two  thre-way valves. One relays controls the solar pump and one relay controls the hot water recycle pump (if you have one). The ethernet
-* shield is used with dhcp to retrieve the gateway and ip.
-* 
-* The boilers
-* The large 500 liter boiler (boiler L) is fitted with one (solar) coil. The small 200 liter boiler (boiler S)
-* is fitted with the solar coil in the lower part and the furnace coil in the higher part of the boiler. The latter is controlled by the FurnaceController.
-*
-* The solar system is connected with two three way valves. The first valve (valve I) controls the flow to boiler L (position B) or the second valve (position A).
-* By default the flow is to boiler L. The second valve controls the flow to boiler S (position B) or the recycle flow (position A). By default in this valve is
-* the small boiler.
-* When both valves are activated the solar flow is returned to the collectors bypassing both boilers. This allows for precise temperature switching.
-*
-* The small and large boilers have 1 and 3 thermometers respectively (Tsl and Tll, Tlm, Tlh). There are thermometers on the input 
-* and output flow (Tin, Tout).
-* 
-* Control
-* The main purpose of the small boiler is to ensure there is always warm water using the higher furnace heated coil. However, the lower solar coil can heat up
-* the entire boiler and save gas. Boiler S is not allowed to exceed 70C, because that would become dangerous for people using hot water.
-* Boiler L is used to accumulate excess heat from the collectors either because the sun is too strong or the sun is not strong enough to reach the required temperature. 
-* The laarge boiler is not allowed to exceed 95C.
-* The system is set to reecycle mode when either there no heat to be gained from the sun or both boilers reached their maximum.
-* The conrol primarily looks at the in- and out flow temperatures, That is the best way to see if you are gaining heat or losing heat in the boiler.
-*
-* Solar pump control
-* todo
-*
-* Data logging
-* Every 30 seconds state and temperatures are logged to an instance of InfluxDB. The interface is a straightforward 'line protocol',\
-* 
-* Settings
-* Private settings have to be stored in eeprom memory. You can deploy several boilers using the same firmware.
-*/
+  /**
+  * Solar boiler control
+  *
+  * This sketch controls a solar heat collector with two boilers and after heater connected to the central heating furnace.
+  * This sketch also controls the solar pump, the hot water recycle pump and pushes data to the cloud.
+  *
+  * Setup
+  *
+  * Setup
+  * The large 500 liter boiler (boiler L) is fitted with one (solar) coil. The small 200 liter boiler (boiler S)
+  * is fitted with a solar coil and a furnace coil in the top. The latter is controlled by another controller (FurnaceController).
+  *
+  * The solar system is connected with two three way valves. The first valve (valve I) controls the flow to boiler L (B) or the second valve (A).
+  * By default the flow is to boiler L. The second valve controls the flow to boiler S (B) or the return flow (A). By default in this valve is
+  * the small boiler.
+  * When both valves are activated the solar flow is returned to the collectors bypassing both boilers. This allows for precise temperature switching.
+  * (Without the return flow, the classical setup is a sensor in the solar collector to switch on the solar pump.)
+  *
+  * The small and large boilers have 1 and 3 thermometers respectively (Tsl and Tll, Tlm, Tlh). There are thermometers on the input 
+  * and output flow (Tin, Tout).
+  * 
+  * Control
+  * The main purpose of the small boiler is to ensure there is always warm water with the central heater coil. However, the lower solar coil can heat up
+  * the entire boiler and save gas. Boiler S is not allowed to exceed 70C, when it does exceed this the recycle pump is switched on permanently.
+  * The central heating / solar heating mode for boiler S work independantly. Solar will heat this boiler until the max temperature of 70C
+  * is reached. The lower thermometer Tsl is used to control the solar coil.
+  * Boiler L is used to accumulate excess heat from the collectors either because the sun is too strong and the small boiler over heats or
+  * beacause the sun is not strong enough to reach the required temperature. The boiler is not allowed to exceed 95C, in this case the valves
+  * are switched to recycle mode. The solar pump is switched off when Tin exceeds 120C.
+  *
+  * Solar pump control
+  * todo
+  *
+  * Data logging
+  * Every 30 seconds state and temperatures are logged to an instance of InfluxDB. The interface is a straightforward 'line protocol', a sort of CSV
+  * interface transported by TCP and HTTP to the server in a fire-and-forget style. Details on this server have to be stored in the Arduino's EEPROM 
+  * memory (see the Properties struct)/
+  */
 
 // Pin configuration
 // The ethernet shield uses pins 10, 11, 12, and 13 for SPI communication
 // Pin 4 is used to communicate with the SD card (unused)
-#define ONE_WIRE_NORTH_PIN 2
-#define ONE_WIRE_SOUTH_PIN 9
-#define SOLAR_PUMP_RELAY_PIN 3 //the relay output pin
-#define RECYCLE_PUMP_RELAY_PIN 4 //the relay output pin for the hot water recycle pump
-#define SOLAR_VALVE_I_RELAY_PIN 5   //Valve I, the first solar three way valve
-#define SOLAR_VALVE_II_RELAY_PIN 6  //Valve II, the second solar three way valve
-#define RELAY_TEST_MS 500
+const byte ONE_WIRE_NORTH_PIN = 2;
+const byte ONE_WIRE_SOUTH_PIN = 9;
+const byte SOLAR_PUMP_RELAY_PIN = 3; //the relay output pin
+const byte RECYCLE_PUMP_RELAY_PIN = 4; //the relay output pin for the hot water recycle pump
+const byte SOLAR_VALVE_I_RELAY_PIN = 5;   //Valve I, the first solar three way valve
+const byte SOLAR_VALVE_II_RELAY_PIN = 6;  //Valve II, the second solar three way valve
 
-/*
-const byte romPosition = 100;
-struct SoilerProperties {
-  char name[11];
-  char position[7];
+#define has_log // remove his to disable udp logging events to elastic search
+#define has_influx // remove this to disable posting the state to InfluxDB
+#define ntest_relays // remove the NO to test the relays
+#define flash_props // Writes property setting into eeprom memory
+
+struct SolarProperties {
+  char name[20];
+  uint8_t macAddress[6];
 };
-*/
-/**
-* Add folloing in EEPROM memory. That would be something like:
 
-SolarProperties solarProp = {
-  "my boiler name",
-  "bottom|middle|top", // top
-  };  
-  EEPROM.put(100, solarProp);
-  
-InfluxProperties influxProp = {
-    macAddress,
-    influxServerIP,
-    database,
-    userName,
-    password
-  };
-  EEPROM.put(romPosition, influxProp);
+#ifdef has_log
+UdpLogger logger(sizeof(SolarProperties) + 1);
+#endif
+#ifdef has_influx
+  const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
+  unsigned long lastPostTime;
+  InfluxDB influx(sizeof(SolarProperties) + sizeof(LogProperties) + 2);
+#endif
 
-*/
-//InfluxDB post settings
-const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
-unsigned long lastPostTime;
-InfluxDB influx(0);
+byte logCount;
 
 // Thermometer devices DALLAS DS18B20+ with the OneWire protocol
 // It seems the one wire cannot be too long. So i have two wires to devide the load.
@@ -139,6 +127,10 @@ const float MAX_TEMP_CHANGE_THRESHOLD_85 = 0.2;
 boolean solarPumpState = true;
 const float MAX_SOLAR_TEMP = 100.0; //Max temp and the pump will be switched off
 const float MAX_SOLAR_THRESHOLD = 5.0; //Threshold temp for the pump to switch back on when the boiler had reached max temp
+uint32_t noSunPumpStopTime = 0;
+byte maybeSunRetryCycles = 0;
+const byte SUN_RETRY_THRESHOLD = 7;
+const uint32_t PUMP_OFF_NO_SUN_MS = 2800000;
 
 // Boundaries for boiler temperature
 const float MAX_BOILER_TEMP = 70.0;
@@ -149,52 +141,78 @@ const float VALVE_ON_THRESHOLD_C = 2.0;
 const float VALVE_OFF_THRESHOLD_C = 0.5;
 
 //Recycle to prevent cooling down boilers
-int coolingCount = 0;
-float lastOutTemperature;
-const int COOLING_COUNT_RESET = 3000; //1000 is approx. 6 minutes
-const float MIN_IN_OUT_BIAS = 0.2;
-const float MIN_SOLAR_TEMP_RISE = 5.0;
+long recycleStart = 0;
+float lastInTemperature;
+const uint32_t COOLING_COUNT_TIMEOUT_MS = 2400000;
+const float MIN_IN_OUT_BIAS = 0.1;
+const float MIN_SOLAR_TEMP_RISE = 3.0;
 
 boolean recyclePumpState = false;
 boolean solarValveIstate = false;
 boolean solarValveIIstate = false;
 
+#if defined(has_influx) || defined(has_log)
+  EthernetUDP udp;
+#endif
+
 void setup() {
   Serial.begin(9600);
-  Serial.println(F("Stelwagen Industries BV solar control appliance"));
 
-  IPAddress influxServerIP(52,16,190,185);
-  InfluxProperties influxProp = {
-    { 0x00, 0xAA, 0x1F, 0xCD, 0x8E, 0x18 },
-    influxServerIP,
-    "nijswiller",
-    "boiler",
-    "000e3wBlyop55A"
-  };
-  EEPROM.put(0, influxProp);
+  #ifdef flash_props
+    SolarProperties spIn = {"koetshuis", {0xAA, 0xAA, 0xDE, 0x1E, 0xAE, 0x11}};
+    EEPROM.put(0, spIn);
+  #endif
 
-  influx.setup();
+  #if defined(has_influx) || defined(has_log)
+    SolarProperties sp;
+    EEPROM.get(0, sp);
+    dhcp(sp.macAddress);
+  #endif
+
+  #ifdef has_log
+    Serial.println("log");
+    #ifdef flash_props
+      LogProperties lp = {"SolarControl", "koetshuis", IPAddress(192, 168, 178, 101), 9000};
+      logger.flash(lp);
+      Serial.print("flashed log at: ");
+      Serial.println(logger.romPosition);
+    #endif
+    logger.setup();
+    logger.postUdp("start");
+  #endif
+
+  #ifdef has_influx
+    Serial.print("influx: ");
+    #ifdef flash_props
+      InfluxProperties inp = {IPAddress(192, 168, 178, 100), 8087};
+      influx.flash(inp);
+      Serial.print("flashed influx at: ");
+      Serial.println(influx.romPosition);
+    #endif
+    
+    Serial.println(influx.setup(udp));
+  #endif
+
   testSensors();
-  
-  // Initialize the relays
-  pinMode(SOLAR_PUMP_RELAY_PIN, OUTPUT);
-  pinMode(RECYCLE_PUMP_RELAY_PIN, OUTPUT);
-  pinMode(SOLAR_VALVE_I_RELAY_PIN, OUTPUT);
-  pinMode(SOLAR_VALVE_II_RELAY_PIN, OUTPUT);
-  testRelays();
 
-  Serial.println(F("Controller is ready to go"));
+  setupRelays();
+  
+  #ifdef test_relays
+    testRelays();
+  #endif
+
+  Serial.println(F("ready"));
 }
 
 void loop() {
   readSensors();
   solarPumpControl();
   solarValveControl();
-  logTemp();
 
   if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
     postData();
   }
+  delay(15000); // control 'debouncer', give valves and temperatures a little time to settle
 }
 
 /**
@@ -207,23 +225,33 @@ void solarValveControl() {
   if (!solarPumpState) {
     // Solar is turned off
     // do nothing
-  } else if (coolingCount > 0 || sensorTin + MIN_IN_OUT_BIAS < sensorTout) {
-    if (coolingCount = 0) {
+  } else if (recycleStart > 0 || sensorTin + MIN_IN_OUT_BIAS < sensorTout) {
+    // In recycle mode OR inflow temperature is lower then outflow (cooling down)
+    if (recycleStart == 0) {
       // I will go in recycle mode now, remember the last out temperature
-      Serial.println(F("Solar is cooling down the boiler swithing to recycle"));
-      lastOutTemperature = sensorTout;
+      Serial.println(F("recycle ccoldown"));
+      logger.writeUdp("switch: recycle, reason: flow in larger than out, value: ");
+      logger.writeUdp(sensorTin - sensorTout);
+      logger.postUdp();
+      lastInTemperature = sensorTin;
+      recycleStart = millis();
+    } else if (millis() - recycleStart > COOLING_COUNT_TIMEOUT_MS || millis() < recycleStart) {
+      // Don't recycle too long, give it another try
+      Serial.print(F("timeout recycle "));
+      Serial.println(millis() - recycleStart);
+      logger.writeUdp("switch: recycle-off, reason: timeout, value: ");
+      logger.writeUdp(millis() - recycleStart);
+      logger.postUdp();
+      recycleStart = 0;
+    } else if (sensorTin > lastInTemperature + MIN_SOLAR_TEMP_RISE) {
+      // if the temperature is going up, stop recycling
+      Serial.println(F("Solar temp rise"));
+      logger.writeUdp("switch: recycle-off, reason: temp rise, value: ");
+      logger.writeUdp(sensorTin - lastInTemperature);
+      logger.postUdp();
+      recycleStart = 0;
     }
-    coolingCount++;
-    // Don't recycle too long, give it another try
-    if (coolingCount > COOLING_COUNT_RESET) {
-      Serial.println(F("Solar is cooling down the boiler swithing to recycle"));
-      coolingCount = 0;
-    }
-    // if the temperature is going up, stop recycling
-    if (sensorTin > lastOutTemperature + MIN_SOLAR_TEMP_RISE) {
-      coolingCount = 0;
-    }
-    recycleSolarOn(); 
+    recycleSolarOn();
   } else if (!solarValveIstate) {
     // The large boiler is being warmed now
     // Strategy
@@ -284,7 +312,8 @@ void smallBoilerSolarOn() {
   } else {
     solarValveIstate = true;
     solarValveIIstate = false;
-    Serial.print(F("Switching valves to heat the small boiler."));    
+    logger.postUdp("valve: small boiler");
+    Serial.println(F("small boiler"));    
   }
 }
 
@@ -294,7 +323,8 @@ void largeBoilerSolarOn() {
   } else {
     solarValveIstate = false;
     //solarValveIIstate has no function here, so keeping it as it is.
-    Serial.print(F("Switching valves to heat the large boiler."));    
+    logger.postUdp("valve: large boiler");
+    Serial.println(F("large boiler"));    
   }
 }
 
@@ -304,7 +334,9 @@ void recycleSolarOn() {
   } else {
     solarValveIstate = true;
     solarValveIIstate = true;
-    Serial.print(F("Switching valves to heat recycle mode."));    
+    maybeSunRetryCycles = 1;
+    logger.postUdp("valve: recycle");
+    Serial.println(F("recycle"));    
   }
 }
 
@@ -316,14 +348,42 @@ void solarPumpControl() {
   if (sensorTin > MAX_SOLAR_TEMP) {
     if (solarPumpState) {
       solarPumpState = FALSE;
-      Serial.println(F("Reached top temperature, I will turn off the pump"));
+      logger.postUdp("max temp: pump off");
       switchSolarPump();
     }
-  } else if (sensorTin < (MAX_SOLAR_TEMP - MAX_SOLAR_THRESHOLD)) {
-    if (!solarPumpState) {
-      solarPumpState = TRUE;
-      Serial.println(F("Temperature dropped below threshold, I will start the pump"));
-      switchSolarPump();
+  } else {
+    if (solarPumpState) {
+      if (maybeSunRetryCycles != 0) {
+        if (maybeSunRetryCycles == SUN_RETRY_THRESHOLD) {
+          maybeSunRetryCycles = 0;
+        } else {
+          maybeSunRetryCycles++;
+          logger.postUdp("maybe sun: flush pipe");  
+        }
+      }
+
+      //When in recycle mode turn off the pump
+      if (maybeSunRetryCycles == 0 && solarValveIstate && solarValveIIstate) {
+        solarPumpState = FALSE;
+        logger.postUdp("no sun: pump off");
+        switchSolarPump();
+        noSunPumpStopTime = millis();
+      }
+    } else {
+      if (noSunPumpStopTime > 0) {
+        // Turn the pump back on after some time
+        if (noSunPumpStopTime > millis() || noSunPumpStopTime + PUMP_OFF_NO_SUN_MS < millis()) {
+          solarPumpState = TRUE;
+          noSunPumpStopTime = 0;
+          switchSolarPump(); 
+          maybeSunRetryCycles = 1;
+          logger.postUdp("maybe sun: pump on");       
+        }
+      } else if (sensorTin < (MAX_SOLAR_TEMP - MAX_SOLAR_THRESHOLD)) {
+        solarPumpState = TRUE;
+        logger.postUdp("max temp: pump on");
+        switchSolarPump();
+      }
     }
   }
 }
@@ -350,6 +410,10 @@ sensorTsl = 99.0;
   // Tubes
   sensorTin = filterSensorTemp(southernSensors.getTempC(sensorAddressTin), sensorTin);
   sensorTout = filterSensorTemp(southernSensors.getTempC(sensorAddressTout), sensorTout);
+  if (++logCount > 5) {
+    logTemp();
+    logCount = 1;
+  }
 }
 
 /**
@@ -357,10 +421,12 @@ sensorTsl = 99.0;
 */
 float filterSensorTemp(float rawSensorTemp, float currentTemp) {
   if (rawSensorTemp == 85.0 && (abs(rawSensorTemp - 85) > MAX_TEMP_CHANGE_THRESHOLD_85)) {
-    Serial.println(F("Ignoring 85.0 C reading from sensor"));
+    logger.postUdp("warn: 85.0 C sensor");
+    Serial.println(F("Ignoring 85.0 C"));
     return currentTemp;
   } else if (rawSensorTemp == -127.0) {
-    Serial.println(F("Ignoring -127.0 C reading from sensor"));
+    logger.postUdp("warn: -127.0 C sensor");
+    Serial.println(F("Ignoring -127.0 C"));
     return currentTemp;
   } else {
     return rawSensorTemp;
@@ -383,31 +449,54 @@ void logTemp() {
 }
 
 void postData() {
-  String data = "boiler500.temperature Tbottom=" + String(sensorTll);
-  data += ",Tmiddle=" + String(sensorTlm);
-  data += ",Ttop=" + String(sensorTlh);
+  Serial.print(F("post"));
+  influx.writeUdp("boiler500.temperature Tbottom=");
+  influx.writeUdp(sensorTll);
+  influx.writeUdp(",Tmiddle=");
+  influx.writeUdp(sensorTlm);
+  influx.writeUdp(",Ttop=");
+  influx.writeUdp(sensorTlh);
+  
+  ////data = "pump,circuit=recycle value=" + recyclePumpState;
+  influx.writeUdp("\npipe_temperature TflowIn=");
+  influx.writeUdp(sensorTin);
+  influx.writeUdp(",TflowOut=");
+  influx.writeUdp(sensorTout);
+  influx.postUdp();
 
-  //data += "\npump,circuit=recycle value=" + recyclePumpState;
-  data += "\npipe_temperature TflowIn=" + String(sensorTin);
-  data += ",TflowOut=" + String(sensorTout);
-  
+  influx.writeUdp("solarstate,circuit=boiler500 value=");
   if (!solarPumpState) {
-    data += "\nsolarstate,circuit=boiler500 value=0\nsolarstate,circuit=boiler200 value=0\nsolarstate,circuit=recycle value=0";
+    influx.writeUdp("0");
   } else if (!solarValveIstate) {
-    data += "\nsolarstate,circuit=boiler500 value=1\nsolarstate,circuit=boiler200 value=0\nsolarstate,circuit=recycle value=0";
+    influx.writeUdp("1");
   } else if (!solarValveIIstate) {
-    data += "\nsolarstate,circuit=boiler500 value=0\nsolarstate,circuit=boiler200 value=1\nsolarstate,circuit=recycle value=0";
+    influx.writeUdp("0");
   } else {
-    data += "\nsolarstate,circuit=boiler500 value=0\nsolarstate,circuit=boiler200 value=0\nsolarstate,circuit=recycle value=1";
+    influx.writeUdp("0");
   }
-  
-  Serial.print(F("Posting data to influx..."));
-  Serial.print(data.length());
-  if (influx.post(data, "Solar controller")) {
-    Serial.println(F("ok"));
+  influx.writeUdp("\nsolarstate,circuit=boiler200 value=");
+  if (!solarPumpState) {
+    influx.writeUdp("0");
+  } else if (!solarValveIstate) {
+    influx.writeUdp("0");
+  } else if (!solarValveIIstate) {
+    influx.writeUdp("1");
   } else {
-    Serial.println(F("failed"));
+    influx.writeUdp("0");
   }
+  influx.writeUdp("\nsolarstate,circuit=recycle value=");
+  if (!solarPumpState) {
+    influx.writeUdp("0");
+  } else if (!solarValveIstate) {
+    influx.writeUdp("0");
+  } else if (!solarValveIIstate) {
+    influx.writeUdp("0");
+  } else {
+    influx.writeUdp("1");
+  }
+  influx.postUdp();
+
+  Serial.println(F("ed influx"));
   lastPostTime = millis();
 }
 
@@ -418,33 +507,56 @@ void postData() {
 void switchSolarPump() {
   postData();
   digitalWrite(SOLAR_PUMP_RELAY_PIN, !solarPumpState);   
-  Serial.println(F("Switched solar pump"));
+  Serial.println(F("solar pump"));
 }
 
+#if defined(has_influx) || defined(has_log)
+void dhcp(uint8_t *macAddress) {
+  Serial.print(F("Connecting dhcp"));
+  delay(1000); // give the ethernet module time to boot up
+  if (Ethernet.begin(macAddress) == 0) {
+    Serial.println(F(" failed"));
+  }
+  else {
+    Serial.println(F(" success"));
+  }
+}
+#endif
+
+void setupRelays() {
+  // Initialize the relays
+  pinMode(SOLAR_PUMP_RELAY_PIN, OUTPUT);
+  pinMode(RECYCLE_PUMP_RELAY_PIN, OUTPUT);
+  pinMode(SOLAR_VALVE_I_RELAY_PIN, OUTPUT);
+  pinMode(SOLAR_VALVE_II_RELAY_PIN, OUTPUT);
+}
+
+#ifdef test_relays
 void testRelays() {
   digitalWrite(SOLAR_PUMP_RELAY_PIN, false);
-  delay(RELAY_TEST_MS);
+  delay(000);
   digitalWrite(SOLAR_PUMP_RELAY_PIN, true);
 
   digitalWrite(RECYCLE_PUMP_RELAY_PIN, false);
-  delay(RELAY_TEST_MS);
+  delay(1000);
   digitalWrite(RECYCLE_PUMP_RELAY_PIN, true);
 
   digitalWrite(SOLAR_VALVE_I_RELAY_PIN, false);
-  delay(RELAY_TEST_MS);
+  delay(1000);
   digitalWrite(SOLAR_VALVE_I_RELAY_PIN, true);
 
   digitalWrite(SOLAR_VALVE_II_RELAY_PIN, false);
-  delay(RELAY_TEST_MS);
+  delay(1000);
   digitalWrite(SOLAR_VALVE_II_RELAY_PIN, true);
 
-  delay(RELAY_TEST_MS);
+  delay(1000);
 
   digitalWrite(SOLAR_PUMP_RELAY_PIN, !solarPumpState);
   digitalWrite(RECYCLE_PUMP_RELAY_PIN, !recyclePumpState);
   digitalWrite(SOLAR_VALVE_I_RELAY_PIN, !solarValveIstate);
   digitalWrite(SOLAR_VALVE_II_RELAY_PIN, !solarValveIIstate);
 }
+#endif
 
 void testSensors() {
   readSensors();

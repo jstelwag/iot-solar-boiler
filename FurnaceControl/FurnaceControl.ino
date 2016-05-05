@@ -20,6 +20,7 @@
 #include <Ethernet.h>
 #include <EEPROM.h>
 #include <InfluxDB.h>
+#include <UdpLogger.h>
 
 /**
 * Simple boiler controller. Turns the furnace on and off when the preset temperature is reached.
@@ -30,52 +31,39 @@
 * Oh, and this controller is connected to the Net. It will upload data every 30 seconds to a InfluxDB database.
 * This makes it easier to be compliant to Legionella regulations and it is course also
 * nice for your boiler to have an internet connection.
-* 
-* Setup
-* A onewire (Dallas) temperature sensor measures the boiler. You will need one of those, Further you need two
-* relays: one to switch the furnace into boiler mode and the other switches the furnace three-way valve: it will
-* let the furnace water flow got the boiler. The ethernet shield is used with dhcp to retrieve the gateway and ip.
 */
 
-const byte romPosition = 200;
-struct BoilerProperties {
-  char name[13];
+struct FurnaceProperties {
+  char name[20];
   char sensorPosition[7];
+  uint8_t macAddress[6];
 };
 
-/**
-* Add folloing in EEPROM memory. That would be something like:
+#define has_log // remove his to disable udp logging events to elastic search
+#define nhas_influx // remove this to disable posting the state to InfluxDB
+#define NOtest_relays // remove the NO to test the relays
+#define flash_props // Writes property setting into eeprom memory
 
-BoilerProperties boilerProp = {
-  "my boiler name",
-  "bottom|middle|top", // top
-  };  
-  EEPROM.put(0, solarProp);
-  
-InfluxProperties influxProp = {
-    macAddress,
-    influxServerIP,
-    database,
-    userName,
-    password
-  };
-  EEPROM.put(romPosition, influxProp);
-*/
+#ifdef has_log
+  UdpLogger logger(sizeof(FurnaceProperties) + 1);
+#endif
+#ifdef has_influx
+  const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
+  unsigned long lastPostTime;
+  InfluxDB influx(sizeof(BoilerProperties) + sizeof(LogProperties) + 2);
+#endif
 
 // Pin configuration
 // The ethernet shield uses pins 10, 11, 12, and 13 for SPI communication
 // Pin 4 is used to communicate with the SD card (unused)
-#define ONE_WIRE_PIN 2
-#define FLOW_VALVE_RELAY_PIN 3   // a three way valve
-#define FURNACE_RELAY_PIN 4  // relay to set the furnace in boiler heating mode
-#define RELAY_TEST_MS 500
+const byte ONE_WIRE_PIN = 2;
+const byte FLOW_VALVE_RELAY_PIN = 5;   // a three way valve
+const byte FURNACE_BOILER_RELAY_PIN = 6;  // relay to set the furnace in boiler mode
+const byte FURNACE_HEATING_RELAY_PIN = 7;  // relay to set the furnace in heating mode
+
+byte logCount;
 
 const float MAX_TEMP_CHANGE_THRESHOLD_85 = 0.2;
-
-//InfluxDB settings
-const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
-unsigned long lastPostTime;
-InfluxDB influx(romPosition);
 
 //Thermometer devices DALLAS DS18B20+ with the OneWire protocol
 OneWire oneWire(ONE_WIRE_PIN);
@@ -83,7 +71,7 @@ DallasTemperature sensors(&oneWire);
 boolean sensorsReady = false;
 
 DeviceAddress boilerSensorAddress = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-float Tboiler;
+double Tboiler;
 
 boolean furnaceState = false;  // state == false is normal heating mode
 boolean flowValveState = false; // valve == false is normal heating mode
@@ -91,38 +79,88 @@ boolean flowValveState = false; // valve == false is normal heating mode
 const float BOILER_START_TEMP = 50.0;
 const float BOILER_STOP_TEMP = 55.0; //This is about the max a Nefit 65 kW furnace can do. Set this to an appropriate value for a different furnace (60 is best).
 
+#if defined(has_influx) || defined(has_log)
+  EthernetUDP udp;
+#endif
+
 void setup() {
   Serial.begin(9600);
-  Serial.println(F("Stelwagen Industries BV boiler control appliance"));
+  Serial.println("start");
 
-  // Initialize the relays
+  #ifdef flash_props
+    FurnaceProperties bpIn = {"koetshuis_kelder", "top", {0xAE, 0xAE, 0xDE, 0x1E, 0xAE, 0x11}};
+    EEPROM.put(0, bpIn);
+  #endif
+
+  #if defined(has_influx) || defined(has_log)
+    FurnaceProperties bp;
+    EEPROM.get(0, bp);
+    dhcp(bp.macAddress);
+  #endif
+  
+  // Init logging of state and events
+  #ifdef has_influx
+    Serial.print("influx: ");
+    #ifdef flash_props
+      InfluxProperties inp = {IPAddress(52, 16, 190, 185), 8087};
+      influx.flash(inp);
+      Serial.print("flashed influx at: ");
+      Serial.println(influx.romPosition);
+    #endif
+    
+    Serial.println(influx.setup(udp));
+  #endif
+  
+  #ifdef has_log
+    Serial.println("log");
+    #ifdef flash_props
+      LogProperties lp = {"FurnaceControl", "koetshuis200", IPAddress(52, 16, 201, 71), 9000};
+      logger.flash(lp);
+      Serial.print("flashed log at: ");
+      Serial.println(logger.romPosition);
+    #endif
+    logger.setup();
+    logger.postUdp("start");
+  #endif
+  
+  Serial.println("pins");
   pinMode(FLOW_VALVE_RELAY_PIN, OUTPUT);
-  pinMode(FURNACE_RELAY_PIN, OUTPUT);
-  testRelays();
-  testSensors();
+  pinMode(FURNACE_BOILER_RELAY_PIN, OUTPUT);
 
-  influx.setup();
-  Serial.println(F("Controller is ready"));
+  #ifdef test_relays
+    Serial.println("test relays");
+    testRelays();
+  #endif
+  Serial.println("test sensors");
+  testSensors();
+  Serial.println(F("ready"));
 }
 
 void loop() {
   setupSensors();
   readSensors();
   furnaceControl();
-  logTemp();
-  if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
-    postData();
-  }
+  #ifdef has_influx
+    if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
+      postData();
+    }
+  #endif
 }
 
 void furnaceControl() {
   if (Tboiler < BOILER_START_TEMP) {
     if (furnaceState) {
-      //Furnace us already on
+      //Furnace is already on
     } else {
+      Serial.print(F("furnace"));
       furnaceState = true;
       flowValveState = true;
-      Serial.println(F("Furnace on."));
+      #ifdef has_log
+        logger.writeUdp("switch: furnace on, value: ");
+        logger.writeUdp(Tboiler);
+        logger.postUdp();
+      #endif
+      Serial.println(F(" on"));
     }
   } else if (Tboiler < BOILER_STOP_TEMP && furnaceState) {
     //Keep the furnace buring
@@ -130,12 +168,18 @@ void furnaceControl() {
     if (!furnaceState) {
       //Furnace us already off
     } else {
+      Serial.print(F("furnace"));
       furnaceState = false;
       flowValveState = false;
-      Serial.println(F("Furnace off."));
+      #ifdef has_log
+        logger.writeUdp("switch: furnace off, value: ");
+        logger.writeUdp(Tboiler);
+        logger.postUdp();
+      #endif
+      Serial.println(F(" off"));
     }
   }
-  digitalWrite(FURNACE_RELAY_PIN, !furnaceState);
+  digitalWrite(FURNACE_BOILER_RELAY_PIN, !furnaceState);
   digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
 }
 
@@ -148,6 +192,10 @@ void readSensors() {
   sensors.requestTemperatures();
   
   Tboiler = filterSensorTemp(sensors.getTempC(boilerSensorAddress), Tboiler);
+  if (++logCount > 4) {
+    logTemp();
+    logCount = 1;
+  }
 }
 
 void logTemp() {
@@ -158,21 +206,28 @@ void logTemp() {
 /**
 * Upload measurements and system state to the influxbd server.
 */
+#ifdef has_influx
 void postData() {
-  BoilerProperties prop;
+  FurnaceProperties prop;
   EEPROM.get(0, prop);
-  String data = "boiler_temperature,boiler=" + String(prop.name) + ",position=" + String(prop.sensorPosition) + ",control=furnace value=" + Tboiler;
-  data += "\nstate,boiler=" + String(prop.name) + ",valve=furnace value=" + (int)furnaceState;
-  Serial.print(F("Posting data to influx..."));
-  Serial.print(data.length());
-  if (influx.post(data, F("Boiler controller"))) {
-    Serial.println(F("ok"));
-  } else {
-    Serial.println(F("failed"));
-  }
+  Serial.print("post"); 
+  influx.writeUdp("boiler_temperature,boiler=");
+  influx.writeUdp(prop.name);
+  influx.writeUdp(",position=");
+  influx.writeUdp(prop.sensorPosition);
+  influx.writeUdp(",control=furnace value=");
+  influx.writeUdp(Tboiler);
+  influx.postUdp();
+  influx.writeUdp("state,boiler=");
+  influx.writeUdp(prop.name);
+  influx.writeUdp(",valve=furnace value=");
+  influx.writeUdp(furnaceState ? "t" : "f");
+  influx.postUdp();
+  Serial.println(F("ed influx"));
 
   lastPostTime = millis();
 }
+#endif
 
 /**
 * Filters typical sensor failure at 85C and -127C
@@ -209,35 +264,51 @@ void setupSensors() {
     Serial.print(sensorCount);
     Serial.println(F(" sensors found"));
     if (sensorCount != 1) {
-      Serial.println(F("======FAILURE ========="));
-      Serial.print(F("Expected one sensor but found "));
+      Serial.println(F("FAILURE Expected one sensor but found "));
       Serial.print(sensorCount);
+      #ifdef has_log
+        logger.postUdp("error: sensor count failure");
+      #endif
     } else {
       sensorsReady = true;
     }
   }
 }
 
+#if defined(has_influx) || defined(has_log)
+void dhcp(uint8_t *macAddress) {
+  Serial.print(F("Connecting to network... "));
+  delay(1000); // give the ethernet module time to boot up
+  if (Ethernet.begin(macAddress) == 0) {
+    Serial.println(F(" failed to configure Ethernet using DHCP"));
+  }
+  else {
+    Serial.print(F(" success! My IP is now "));
+    Serial.println(Ethernet.localIP());
+  }
+}
+#endif
+
 // ######################################## /SETUP
 
 
 //######################################### TESTING
 
+#ifdef test_relays
 void testRelays() {
   digitalWrite(FLOW_VALVE_RELAY_PIN, false);
-  delay(RELAY_TEST_MS);
+  delay(1000);
   digitalWrite(FLOW_VALVE_RELAY_PIN, true);
 
   digitalWrite(FURNACE_RELAY_PIN, false);
-  delay(RELAY_TEST_MS);
+  delay(1000);
   digitalWrite(FURNACE_RELAY_PIN, true);
 }
+#endif
 
 void testSensors() {
   readSensors();
-  Serial.println(F("Sensor readings:"));
-  Serial.print(F("- Tboiler: "));
-  Serial.println(Tboiler);
+  logTemp();
 }
 
 // ######################################## /TESTING
