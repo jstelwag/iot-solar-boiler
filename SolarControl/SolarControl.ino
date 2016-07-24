@@ -17,7 +17,6 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <EEPROM.h>
-#include <InfluxDB.h>
 #include <UdpLogger.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -27,8 +26,6 @@
   *
   * This sketch controls a solar heat collector with two boilers and after heater connected to the central heating furnace.
   * This sketch also controls the solar pump, the hot water recycle pump and pushes data to the cloud.
-  *
-  * Setup
   *
   * Setup
   * The large 500 liter boiler (boiler L) is fitted with one (solar) coil. The small 200 liter boiler (boiler S)
@@ -72,25 +69,30 @@ const byte SOLAR_VALVE_I_RELAY_PIN = 5;   //Valve I, the first solar three way v
 const byte SOLAR_VALVE_II_RELAY_PIN = 6;  //Valve II, the second solar three way valve
 
 #define has_log // remove his to disable udp logging events to elastic search
-#define has_influx // remove this to disable posting the state to InfluxDB
 #define ntest_relays // remove the NO to test the relays
 #define flash_props // Writes property setting into eeprom memory
 
 struct SolarProperties {
   char name[20];
   uint8_t macAddress[6];
+  IPAddress masterIP;
+  uint16_t masterPort;
 };
 
 #ifdef has_log
 UdpLogger logger(sizeof(SolarProperties) + 1);
 #endif
-#ifdef has_influx
-  const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
-  unsigned long lastPostTime;
-  InfluxDB influx(sizeof(SolarProperties) + sizeof(LogProperties) + 2);
-#endif
+
+const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
+unsigned long lastPostTime;
+boolean received = false;
+EthernetClient client;
+char receiveBuffer[3];
+byte bufferPosition;
 
 byte logCount;
+
+boolean sunset = false;
 
 // Thermometer devices DALLAS DS18B20+ with the OneWire protocol
 // It seems the one wire cannot be too long. So i have two wires to devide the load.
@@ -151,46 +153,30 @@ boolean recyclePumpState = false;
 boolean solarValveIstate = false;
 boolean solarValveIIstate = false;
 
-#if defined(has_influx) || defined(has_log)
-  EthernetUDP udp;
+#ifdef has_log
+EthernetUDP udp;
 #endif
 
 void setup() {
   Serial.begin(9600);
 
   #ifdef flash_props
-    SolarProperties spIn = {"koetshuis", {0xAA, 0xAA, 0xDE, 0x1E, 0xAE, 0x11}};
+    IPAddress masterIP(192, 168, 178, 18);
+    SolarProperties spIn = {"solar_koetshuis", {0xAA, 0xAA, 0xDE, 0x1E, 0xAE, 0x11}, masterIP, 8888};
     EEPROM.put(0, spIn);
   #endif
 
-  #if defined(has_influx) || defined(has_log)
-    SolarProperties sp;
-    EEPROM.get(0, sp);
-    dhcp(sp.macAddress);
-  #endif
+  SolarProperties sp;
+  EEPROM.get(0, sp);
+  dhcp(sp.macAddress);
 
   #ifdef has_log
-    Serial.println("log");
     #ifdef flash_props
       LogProperties lp = {"SolarControl", "koetshuis", IPAddress(192, 168, 178, 101), 9000};
       logger.flash(lp);
-      Serial.print("flashed log at: ");
-      Serial.println(logger.romPosition);
     #endif
     logger.setup();
     logger.postUdp("start");
-  #endif
-
-  #ifdef has_influx
-    Serial.print("influx: ");
-    #ifdef flash_props
-      InfluxProperties inp = {IPAddress(192, 168, 178, 100), 8087};
-      influx.flash(inp);
-      Serial.print("flashed influx at: ");
-      Serial.println(influx.romPosition);
-    #endif
-    
-    Serial.println(influx.setup(udp));
   #endif
 
   testSensors();
@@ -200,20 +186,152 @@ void setup() {
   #ifdef test_relays
     testRelays();
   #endif
-
-  Serial.println(F("ready"));
 }
 
 void loop() {
   readSensors();
-  solarPumpControl();
-  solarValveControl();
+  if (!sunset) {
+    solarPumpControl();
+    //smallBoilerSolarOn();
+    //  digitalWrite(SOLAR_VALVE_I_RELAY_PIN, !solarValveIstate);
+    //  digitalWrite(SOLAR_VALVE_II_RELAY_PIN, !solarValveIIstate);
 
-  if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
-    postData();
+    solarValveControl();
   }
+  
+  if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
+    request();
+    //delay(100); //todo maybe remove
+  }
+
+  receive();
+
+  //todo remove
   delay(15000); // control 'debouncer', give valves and temperatures a little time to settle
 }
+
+
+void request() {
+  Serial.print(F("post"));
+#ifdef has_log
+  logger.postUdp("Logging to master");
+#endif
+  
+  client.stop();
+  bufferPosition = 0;
+  for (byte b = 0; b < sizeof(receiveBuffer); b++) {
+    receiveBuffer[b] = '\0';
+  }
+  
+  SolarProperties prop;
+  EEPROM.get(0, prop);
+
+  if (client.connect(prop.masterIP, prop.masterPort)) {
+    client.print(prop.name);
+    client.print(":");
+    client.print("boiler500.temperature Tbottom=");
+    client.print(sensorTll);
+    client.print(",Tmiddle=");
+    client.print(sensorTlm);
+    client.print(",Ttop=");
+    client.print(sensorTlh);
+/*
+    client.print("\npipe_temperature TflowIn=");
+    client.print(sensorTin);
+    client.print(",TflowOut=");
+    client.print(sensorTout);
+    
+    client.print("\nsolarstate,circuit=boiler500 value=");
+    if (!solarPumpState) {
+      client.print("0");
+    } else if (!solarValveIstate) {
+      client.print("1");
+    } else if (!solarValveIIstate) {
+      client.print("0");
+    } else {
+      client.print("0");
+    }
+    
+    client.print("\nsolarstate,circuit=boiler200 value=");
+    if (!solarPumpState) {
+      client.print("0");
+    } else if (!solarValveIstate) {
+      client.print("0");
+    } else if (!solarValveIIstate) {
+      client.print("1");
+    } else {
+      client.print("0");
+    }
+    */
+    client.print("solarstate,circuit=recycle value=");
+    if (!solarPumpState) {
+      client.println("0");
+    } else if (!solarValveIstate) {
+      client.println("0");
+    } else if (!solarValveIIstate) {
+      client.println("0");
+    } else {
+      client.println("1");
+    }
+    Serial.println(F("ed"));
+  } else {
+    Serial.println(F(" failed"));
+    client.stop();
+    Ethernet.maintain();
+#ifdef has_log
+    logger.postUdp("Post failed");
+#endif
+  }
+
+  lastPostTime = millis();
+}
+
+void receive() {
+  Serial.println(F("r"));
+  if (client.available()) {
+    Serial.print(F("receive"));
+    while (client.available()) {
+      char c = client.read();
+      if (c == 'E') {
+        client.flush();
+        received = true;
+        Serial.println(F("d"));
+      } else {
+        receiveBuffer[bufferPosition] = c;
+        bufferPosition++;
+      }
+    }
+  }
+
+  if (received) {
+    if (sunset != (receiveBuffer[0] - 48)) {
+      sunset = !sunset;
+#ifdef has_log
+      logger.writeUdp("received sunset change, sunset value: ");
+      logger.writeUdp(receiveBuffer[0]-48);
+#endif
+      if (!sunset) {
+#ifdef has_log
+        logger.writeUdp(", turning solar to sleep");
+#endif
+        maybeSunRetryCycles = 0;
+        noSunPumpStopTime = 0;
+        recycleStart = 0;
+        solarPumpState = FALSE;
+        switchSolarPump();
+      } else {
+#ifdef has_log
+        logger.writeUdp(", solar awake");
+#endif
+      }
+#ifdef has_log
+      logger.postUdp();
+#endif
+    }
+    received = false;
+  }
+}
+
 
 /**
 * The small boiler is controlled by the low temperature sensor for solar, the high
@@ -230,25 +348,31 @@ void solarValveControl() {
     if (recycleStart == 0) {
       // I will go in recycle mode now, remember the last out temperature
       Serial.println(F("recycle ccoldown"));
+#ifdef has_log
       logger.writeUdp("switch: recycle, reason: flow in larger than out, value: ");
       logger.writeUdp(sensorTin - sensorTout);
       logger.postUdp();
+#endif
       lastInTemperature = sensorTin;
       recycleStart = millis();
     } else if (millis() - recycleStart > COOLING_COUNT_TIMEOUT_MS || millis() < recycleStart) {
       // Don't recycle too long, give it another try
       Serial.print(F("timeout recycle "));
       Serial.println(millis() - recycleStart);
+#ifdef has_log
       logger.writeUdp("switch: recycle-off, reason: timeout, value: ");
       logger.writeUdp(millis() - recycleStart);
       logger.postUdp();
+#endif
       recycleStart = 0;
     } else if (sensorTin > lastInTemperature + MIN_SOLAR_TEMP_RISE) {
       // if the temperature is going up, stop recycling
       Serial.println(F("Solar temp rise"));
+#ifdef has_log
       logger.writeUdp("switch: recycle-off, reason: temp rise, value: ");
       logger.writeUdp(sensorTin - lastInTemperature);
       logger.postUdp();
+#endif
       recycleStart = 0;
     }
     recycleSolarOn();
@@ -312,7 +436,9 @@ void smallBoilerSolarOn() {
   } else {
     solarValveIstate = true;
     solarValveIIstate = false;
+#ifdef has_log
     logger.postUdp("valve: small boiler");
+#endif
     Serial.println(F("small boiler"));    
   }
 }
@@ -323,7 +449,9 @@ void largeBoilerSolarOn() {
   } else {
     solarValveIstate = false;
     //solarValveIIstate has no function here, so keeping it as it is.
+#ifdef has_log
     logger.postUdp("valve: large boiler");
+#endif
     Serial.println(F("large boiler"));    
   }
 }
@@ -335,7 +463,9 @@ void recycleSolarOn() {
     solarValveIstate = true;
     solarValveIIstate = true;
     maybeSunRetryCycles = 1;
+#ifdef has_log
     logger.postUdp("valve: recycle");
+#endif    
     Serial.println(F("recycle"));    
   }
 }
@@ -348,7 +478,9 @@ void solarPumpControl() {
   if (sensorTin > MAX_SOLAR_TEMP) {
     if (solarPumpState) {
       solarPumpState = FALSE;
+#ifdef has_log
       logger.postUdp("max temp: pump off");
+#endif
       switchSolarPump();
     }
   } else {
@@ -358,14 +490,18 @@ void solarPumpControl() {
           maybeSunRetryCycles = 0;
         } else {
           maybeSunRetryCycles++;
+#ifdef has_log
           logger.postUdp("maybe sun: flush pipe");  
+#endif
         }
       }
 
       //When in recycle mode turn off the pump
       if (maybeSunRetryCycles == 0 && solarValveIstate && solarValveIIstate) {
         solarPumpState = FALSE;
+#ifdef has_log
         logger.postUdp("no sun: pump off");
+#endif
         switchSolarPump();
         noSunPumpStopTime = millis();
       }
@@ -377,11 +513,15 @@ void solarPumpControl() {
           noSunPumpStopTime = 0;
           switchSolarPump(); 
           maybeSunRetryCycles = 1;
+#ifdef has_log
           logger.postUdp("maybe sun: pump on");       
+#endif
         }
       } else if (sensorTin < (MAX_SOLAR_TEMP - MAX_SOLAR_THRESHOLD)) {
         solarPumpState = TRUE;
+#ifdef has_log
         logger.postUdp("max temp: pump on");
+#endif
         switchSolarPump();
       }
     }
@@ -421,11 +561,15 @@ sensorTsl = 99.0;
 */
 float filterSensorTemp(float rawSensorTemp, float currentTemp) {
   if (rawSensorTemp == 85.0 && (abs(rawSensorTemp - 85) > MAX_TEMP_CHANGE_THRESHOLD_85)) {
+#ifdef has_log
     logger.postUdp("warn: 85.0 C sensor");
+#endif
     Serial.println(F("Ignoring 85.0 C"));
     return currentTemp;
   } else if (rawSensorTemp == -127.0) {
+#ifdef has_log
     logger.postUdp("warn: -127.0 C sensor");
+#endif
     Serial.println(F("Ignoring -127.0 C"));
     return currentTemp;
   } else {
@@ -448,69 +592,15 @@ void logTemp() {
   Serial.println(sensorTout); 
 }
 
-void postData() {
-  Serial.print(F("post"));
-  influx.writeUdp("boiler500.temperature Tbottom=");
-  influx.writeUdp(sensorTll);
-  influx.writeUdp(",Tmiddle=");
-  influx.writeUdp(sensorTlm);
-  influx.writeUdp(",Ttop=");
-  influx.writeUdp(sensorTlh);
-  
-  ////data = "pump,circuit=recycle value=" + recyclePumpState;
-  influx.writeUdp("\npipe_temperature TflowIn=");
-  influx.writeUdp(sensorTin);
-  influx.writeUdp(",TflowOut=");
-  influx.writeUdp(sensorTout);
-  influx.postUdp();
-
-  influx.writeUdp("solarstate,circuit=boiler500 value=");
-  if (!solarPumpState) {
-    influx.writeUdp("0");
-  } else if (!solarValveIstate) {
-    influx.writeUdp("1");
-  } else if (!solarValveIIstate) {
-    influx.writeUdp("0");
-  } else {
-    influx.writeUdp("0");
-  }
-  influx.writeUdp("\nsolarstate,circuit=boiler200 value=");
-  if (!solarPumpState) {
-    influx.writeUdp("0");
-  } else if (!solarValveIstate) {
-    influx.writeUdp("0");
-  } else if (!solarValveIIstate) {
-    influx.writeUdp("1");
-  } else {
-    influx.writeUdp("0");
-  }
-  influx.writeUdp("\nsolarstate,circuit=recycle value=");
-  if (!solarPumpState) {
-    influx.writeUdp("0");
-  } else if (!solarValveIstate) {
-    influx.writeUdp("0");
-  } else if (!solarValveIIstate) {
-    influx.writeUdp("0");
-  } else {
-    influx.writeUdp("1");
-  }
-  influx.postUdp();
-
-  Serial.println(F("ed influx"));
-  lastPostTime = millis();
-}
-
 /**
 * Switches the pin state to the current solarPumpState to the relay pin
 * Before that it will post data to emon.
 */
 void switchSolarPump() {
-  postData();
   digitalWrite(SOLAR_PUMP_RELAY_PIN, !solarPumpState);   
   Serial.println(F("solar pump"));
 }
 
-#if defined(has_influx) || defined(has_log)
 void dhcp(uint8_t *macAddress) {
   Serial.print(F("Connecting dhcp"));
   delay(1000); // give the ethernet module time to boot up
@@ -521,7 +611,6 @@ void dhcp(uint8_t *macAddress) {
     Serial.println(F(" success"));
   }
 }
-#endif
 
 void setupRelays() {
   // Initialize the relays
