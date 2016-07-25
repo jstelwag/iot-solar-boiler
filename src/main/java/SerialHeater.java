@@ -1,4 +1,9 @@
-import org.usb4java.*;
+import org.apache.commons.io.IOUtils;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.List;
 
 
 /**
@@ -6,44 +11,15 @@ import org.usb4java.*;
  */
 public class SerialHeater {
 
-    public SerialHeater() {
-        Context context = new Context();
+    public SerialHeater() throws IOException {
+        while (true) {
+            File usb = new File("dev/ttyACM0");
+            List<String> list = IOUtils.readLines(new FileReader(usb));
 
-        // Initialize the libusb context
-        int result = LibUsb.init(context);
-        if (result < 0) {
-            throw new LibUsbException("Unable to initialize libusb", result);
-        }
-
-        // Read the USB device list
-        DeviceList list = new DeviceList();
-        result = LibUsb.getDeviceList(context, list);
-        if (result < 0) {
-            throw new LibUsbException("Unable to get device list", result);
-        }
-
-        try {
-            // Iterate over all devices and list them
-            for (Device device : list) {
-                int address = LibUsb.getDeviceAddress(device);
-                int busNumber = LibUsb.getBusNumber(device);
-                DeviceDescriptor descriptor = new DeviceDescriptor();
-                result = LibUsb.getDeviceDescriptor(device, descriptor);
-                if (result < 0) {
-                    throw new LibUsbException(
-                            "Unable to read device descriptor", result);
-                }
-                System.out.format(
-                        "Bus %03d, Device %03d: Vendor %04x, Product %04x%n",
-                        busNumber, address, descriptor.idVendor(),
-                        descriptor.idProduct());
+            System.out.print("Read " + list.size());
+            if (!list.isEmpty()) {
+                System.out.println("with " + list.get(list.size() - 1));
             }
-        } finally {
-            // Ensure the allocated device list is freed
-            LibUsb.freeDeviceList(list, true);
         }
-
-        // Deinitialize the libusb context
-        LibUsb.exit(context);
     }
 }

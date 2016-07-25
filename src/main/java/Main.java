@@ -12,7 +12,7 @@ public class Main {
             new StateLogger();
         } else if (args[0].equals("Controller")) {
             new Controller();
-        } else {//if (args[0].equals("SerialHeater")) {
+        } else if (args[0].equals("SerialHeater")) {
             new SerialHeater();
         }
     }
