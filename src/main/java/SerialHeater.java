@@ -21,8 +21,7 @@ public class SerialHeater implements SerialPortEventListener {
      * making the displayed results codepage independent
      */
     private BufferedReader input;
-    /** The output stream to the port */
-    private OutputStream output;
+
     /** Milliseconds to block while waiting for port open */
     private static final int TIME_OUT = 2000;
     /** Default bits per second for COM port. */
@@ -60,7 +59,6 @@ public class SerialHeater implements SerialPortEventListener {
 
             // open the streams
             input = new BufferedReader(new InputStreamReader(serialPort.getInputStream()));
-            output = serialPort.getOutputStream();
 
             // add event listeners
             serialPort.addEventListener(this);
@@ -68,6 +66,7 @@ public class SerialHeater implements SerialPortEventListener {
         } catch (Exception e) {
             System.err.println(e.toString());
         }
+        addShutdownHook();
     }
 
     /**
@@ -87,30 +86,36 @@ public class SerialHeater implements SerialPortEventListener {
     public synchronized void serialEvent(SerialPortEvent oEvent) {
         if (oEvent.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
-                String inputLine=input.readLine();
+                String inputLine = input.readLine();
                 if (inputLine.contains(":") && StringUtils.isNumeric(inputLine.split(":")[1])) {
                     Jedis jedis = new Jedis("localhost");
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
                     System.out.println(jedis.get("boiler200.Ttop"));
                     jedis.close();
                 }
-            } catch (Exception e) {
+                System.out.println(inputLine);
+            } catch (IOException e) {
                 System.err.println(e.toString());
             }
         }
-        // Ignore all the other eventTypes, but you should consider the other ones.
     }
 
     public void run() throws Exception {
         initialize();
-        Thread t=new Thread() {
+        Thread t = new Thread() {
             public void run() {
-                //the following line will keep this app alive for 1000 seconds,
-                //waiting for events to occur and responding to them (printing incoming messages to console).
-                try {Thread.sleep(1000000);} catch (InterruptedException ie) {}
+                try {Thread.sleep(10000);} catch (InterruptedException ie) {}
             }
         };
         t.start();
-        System.out.println("Started");
+    }
+
+    private void addShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                close();
+            }
+        });
     }
 }
