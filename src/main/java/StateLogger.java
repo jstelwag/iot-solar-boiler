@@ -9,31 +9,31 @@ import java.net.*;
  */
 public class StateLogger {
 
-    InetAddress host;
+    final InetAddress host;
     final int port;
-    DatagramSocket socket;
-    Jedis jedis;
+    final DatagramSocket socket;
+    final Jedis jedis;
 
-    public StateLogger() {
+    public StateLogger() throws SocketException, UnknownHostException {
         final Properties properties = new Properties();
         try {
             host = InetAddress.getByName(properties.prop.getProperty("influx.ip"));
+            port = Integer.parseInt(properties.prop.getProperty("influx.port"));
+            socket = new DatagramSocket();
         } catch (UnknownHostException e) {
             e.printStackTrace();
+            throw e;
         }
-        port = Integer.parseInt(properties.prop.getProperty("influx.port"));
-        try {
-            socket = new DatagramSocket();
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
+
         jedis = new Jedis("localhost");
         logState();
         logTemperatures();
         sunLogger();
+        jedis.close();
+        socket.close();
     }
 
-    public void logTemperatures() {
+    void logTemperatures() {
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
             String line = sensorLocation + '.' + "temperature ";
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
@@ -48,7 +48,7 @@ public class StateLogger {
         }
     }
 
-    public void logState() {
+    void logState() {
         String solarState = jedis.get("solarState");
         boolean solarOff = "solarpumpOff".equals(solarState) || "error".equals(solarState);
         String line = "solarstate,circuit=boiler500 value=";
@@ -60,9 +60,13 @@ public class StateLogger {
         line = "solarstate,circuit=recycle value=";
         line += solarOff ? "0" : "recycle".equals(solarState) ? "1" : "0";
         send(line);
+        if (jedis.exists("boiler200.state")) {
+            line = "boiler200.state value=" + jedis.get("boiler200.state");
+            send(line);
+        }
     }
 
-    public void sunLogger() {
+    void sunLogger() {
         Sun sun = new Sun();
         AzimuthZenithAngle position = sun.position();
         String line = "sun azimuth=" + position.getAzimuth()
@@ -71,7 +75,7 @@ public class StateLogger {
         send(line);
     }
 
-    private void send(String line) {
+    void send(String line) {
         byte[] data = line.getBytes();
         try {
             DatagramPacket packet = new DatagramPacket(data, data.length, host, port);

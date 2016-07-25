@@ -2,7 +2,6 @@ import gnu.io.CommPortIdentifier;
 import gnu.io.SerialPort;
 import gnu.io.SerialPortEvent;
 import gnu.io.SerialPortEventListener;
-import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
 import java.io.*;
@@ -12,7 +11,7 @@ import java.util.Enumeration;
 /**
  * Created by Jaap on 25-7-2016.
  */
-public class SerialHeater implements SerialPortEventListener {
+public class SerialSlaveController implements SerialPortEventListener {
     SerialPort serialPort;
 
     /**
@@ -87,9 +86,9 @@ public class SerialHeater implements SerialPortEventListener {
         if (oEvent.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
                 String inputLine = input.readLine();
-                if (inputLine.contains(":") && StringUtils.isNumeric(inputLine.split(":")[1])) {
+                if (inputLine.contains(":")) {
                     Jedis jedis = new Jedis("localhost");
-                    System.out.println(jedis.exists("boiler200.Ttop"));
+                    jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
                     System.out.println(jedis.get("boiler200.Ttop"));
                     jedis.close();
@@ -100,7 +99,7 @@ public class SerialHeater implements SerialPortEventListener {
         }
     }
 
-    public void run() throws Exception {
+    public void run() {
         initialize();
         Thread t = new Thread() {
             public void run() {

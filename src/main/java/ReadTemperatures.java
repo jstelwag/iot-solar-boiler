@@ -13,7 +13,6 @@ public class ReadTemperatures {
     public ReadTemperatures() {
         Properties prop = new Properties();
         Jedis jedis = new Jedis("localhost");
-
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
@@ -25,6 +24,15 @@ public class ReadTemperatures {
                     System.out.println(e.toString() + " at sensor " + key);
                     e.printStackTrace();
                 }
+            }
+        }
+        jedis.close();
+        if (!checkSlaveTemperatures()) {
+            // TODO do some logging
+            try {
+                new SerialSlaveController().run();
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }
@@ -44,5 +52,12 @@ public class ReadTemperatures {
         }
 
         throw new IOException("Did not find a temperature in file " + file);
+    }
+
+    boolean checkSlaveTemperatures() {
+        Jedis jedis = new Jedis("localhost");
+        boolean retVal = jedis.exists("boiler200.Ttop");
+        jedis.close();
+        return retVal;
     }
 }
