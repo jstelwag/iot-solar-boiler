@@ -5,7 +5,7 @@ import java.io.IOException;
  */
 public class Main {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
         if (args[0].equals("ReadTemperatures")) {
             new ReadTemperatures();
         } else if (args[0].equals("StateLogger")) {
@@ -13,7 +13,7 @@ public class Main {
         } else if (args[0].equals("Controller")) {
             new Controller();
         } else if (args[0].equals("SerialHeater")) {
-            new SerialHeater();
+            new SerialHeater().run();
         }
     }
 }
