@@ -89,11 +89,11 @@ public class SerialHeater implements SerialPortEventListener {
                 String inputLine = input.readLine();
                 if (inputLine.contains(":") && StringUtils.isNumeric(inputLine.split(":")[1])) {
                     Jedis jedis = new Jedis("localhost");
+                    System.out.println(jedis.exists("boiler200.Ttop"));
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
                     System.out.println(jedis.get("boiler200.Ttop"));
                     jedis.close();
                 }
-                System.out.println(inputLine);
             } catch (IOException e) {
                 System.err.println(e.toString());
             }
