@@ -1,6 +1,8 @@
 import org.apache.commons.io.IOUtils;
+import redis.clients.jedis.Jedis;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -8,18 +10,29 @@ import java.util.List;
  */
 public class ReadTemperatures {
 
-    public static void main(String[] args) throws InterruptedException {
-      while (true) {
-          String deviceId = "28-0000058ddbb6";
-          double t = readDeviceTemperature(deviceId);
-          System.out.println("It is " + t + "C");
-          Thread.sleep(200);
-      }
+    public ReadTemperatures() {
+        Properties prop = new Properties();
+        Jedis jedis = new Jedis("localhost");
+
+        for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
+            for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
+                String key = sensorLocation + '.' + sensorPosition;
+                try {
+                    double t = readDeviceTemperature(prop.prop.getProperty(key));
+                    jedis.setex(key, Properties.redisExpireSeconds, String.valueOf(t));
+                } catch (IOException e) {
+                    //TODO log it
+                    System.out.println(e.toString() + " at sensor " + key);
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
-    public static double readDeviceTemperature(String deviceId) {
+    double readDeviceTemperature(String deviceId) throws IOException {
+        String file = "/sys/bus/w1/devices/" + deviceId + "/w1_slave";
 
-        try (FileInputStream in = new FileInputStream("/sys/bus/w1/devices/" + deviceId + "/w1_slave")) {
+        try (FileInputStream in = new FileInputStream(file)) {
             List<String> lines = IOUtils.readLines(in, "utf8");
             for (String line : lines) {
                 if (line.contains("t=")) {
@@ -27,9 +40,9 @@ public class ReadTemperatures {
                 }
             }
         } catch (java.io.IOException e) {
-            //Log to somewhere
+            throw new IOException("Did not find temperature file " + file);
         }
 
-        return 0.0; //todo better throw an exception
+        throw new IOException("Did not find a temperature in file " + file);
     }
 }

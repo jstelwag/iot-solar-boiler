@@ -33,7 +33,7 @@
                     <archive>
                         <manifest>
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
-                            <mainClass>ReadTemperatures</mainClass>
+                            <mainClass>Main</mainClass>
                             <addClasspath>true</addClasspath>
                         </manifest>
                         <manifestEntries>
@@ -76,6 +76,16 @@
             <groupId>com.pi4j</groupId>
             <artifactId>pi4j-core</artifactId>
             <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>2.9.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.usb4java</groupId>
+            <artifactId>usb4java</artifactId>
+            <version>1.2.0</version>
         </dependency>
     </dependencies>
 </project>
