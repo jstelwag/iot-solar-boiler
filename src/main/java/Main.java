@@ -2,20 +2,24 @@
  * Created by Jaap on 25-7-2016.
  */
 public class Main {
-
     public static void main(String[] args) {
         try {
-            if (args[0].equals("ReadTemperatures")) {
-                new ReadTemperatures();
-            } else if (args[0].equals("FluxLogger")) {
-                new FluxLogger();
-            } else if (args[0].equals("Controller")) {
-                new Controller();
-            } else {
-                //TODO error log
+            switch (args[0]) {
+                case "ReadTemperatures":
+                    new ReadTemperatures();
+                    break;
+                case "FluxLogger":
+                    new FluxLogger();
+                    break;
+                case "Controller":
+                    new Controller();
+                    break;
+                default:
+                    LogstashLogger.INSTANCE.message("ERROR: unknown parameter for Main " + args[0]);
+                    break;
             }
         } catch (Exception e) {
-            //todo log
+            LogstashLogger.INSTANCE.message("ERROR: " + args[0] + " has finished with unhandled exception " + e.toString());
         }
     }
 }

@@ -47,10 +47,9 @@ public class Controller {
 
     private double TflowIn, TflowOut, stateStartTflowOut;
 
-    final int STATE_CHANGE_GRACE_MILLISECONDS = 60*1000;
-
+    private final static int STATE_CHANGE_GRACE_MILLISECONDS = 60*1000;
     private final static Pin SOLAR_PUMP_PIN = RaspiPin.GPIO_05;
-    private final static Pin RECYCLE_PUMP_PIN = RaspiPin.GPIO_06; // hot clean water recycle pump
+    private final static Pin RECYCLE_PUMP_PIN = RaspiPin.GPIO_06; // hot clean water recycle pump (reserved, unused)
     private final static Pin VALVE_I_PIN = RaspiPin.GPIO_07; // Large Boiler (off) | Valve II (On)
     private final static Pin VALVE_II_PIN = RaspiPin.GPIO_08; // Small Boiler (off) | Recycle (On)
 
@@ -58,19 +57,22 @@ public class Controller {
         jedis = new Jedis("localhost");
         gpio = GpioFactory.getInstance();
         readTemperatures();
+        overheatCheck();
         control();
     }
 
-    void control() {
+    private void control() {
         Sun sun = new Sun();
-        if (sun.shining()) {
-            controlOn();
-        } else {
+        if (!sun.shining()) {
             statePowerOff();
+        } else if ("overheat".equals(jedis.get("solarState"))) {
+            overheatControl();
+        } else {
+            controlOn();
         }
     }
 
-    void controlOn() {
+    private void controlOn() {
         long lastStateChange = 0;
         if (jedis.exists("lastStateChange")) {
             lastStateChange = new Date().getTime() - Long.valueOf(jedis.get("lastStateChange"));
@@ -78,7 +80,7 @@ public class Controller {
         if (lastStateChange == 0) {
             stateStartup();
         } else if (lastStateChange < STATE_CHANGE_GRACE_MILLISECONDS) {
-            stateUnchanged();
+            stateUnchanged(); // After a state change, allow for the system to settle in
         } else {
             if ("startup".equals(jedis.get("solarState"))) {
                 stateRecycle();
@@ -102,7 +104,15 @@ public class Controller {
         }
     }
 
-    void readTemperatures() throws IOException {
+    private void overheatCheck() {
+
+    }
+
+    private void overheatControl() {
+
+    }
+
+    private void readTemperatures() throws IOException {
         if (jedis.exists("pipe.TflowIn") && jedis.exists("pipe.TflowOut")) {
             TflowIn = Double.parseDouble(jedis.get("pipe.TflowIn"));
             TflowOut = Double.parseDouble(jedis.get("pipe.TflowOut"));
@@ -111,9 +121,12 @@ public class Controller {
             LogstashLogger.INSTANCE.message("ERROR: no temperature readings available, going into fail state");
             throw new IOException("No control temperature available");
         }
+        if (jedis.exists("stateStartTflowOut")) {
+            stateStartTflowOut = Double.parseDouble(jedis.get("stateStartTflowOut"));
+        }
     }
 
-    void stateUnchanged() {
+    private void stateUnchanged() {
         if ("startup".equals(jedis.get("solarState"))) {
             pin(SOLAR_PUMP_PIN, PinState.HIGH);
             pin(VALVE_I_PIN, PinState.HIGH);
@@ -141,7 +154,7 @@ public class Controller {
 
     }
 
-    void stateStartup() {
+    private void stateStartup() {
         pin(SOLAR_PUMP_PIN, PinState.HIGH);
         pin(VALVE_I_PIN, PinState.HIGH);
         pin(VALVE_II_PIN, PinState.HIGH);
@@ -150,7 +163,7 @@ public class Controller {
         LogstashLogger.INSTANCE.message("Going into startup state");
     }
 
-    void stateRecycle() {
+    private void stateRecycle() {
         pin(SOLAR_PUMP_PIN, PinState.HIGH);
         pin(VALVE_I_PIN, PinState.HIGH);
         pin(VALVE_II_PIN, PinState.HIGH);
@@ -160,7 +173,7 @@ public class Controller {
         LogstashLogger.INSTANCE.message("Going into recycle state");
     }
 
-    void stateLargeBoiler() {
+    private void stateLargeBoiler() {
         pin(SOLAR_PUMP_PIN, PinState.HIGH);
         pin(VALVE_I_PIN, PinState.LOW);
         pin(VALVE_II_PIN, PinState.LOW);
@@ -170,7 +183,7 @@ public class Controller {
         LogstashLogger.INSTANCE.message("Switching to boiler500");
     }
 
-    void stateSmallBoiler() {
+    private void stateSmallBoiler() {
         pin(SOLAR_PUMP_PIN, PinState.HIGH);
         pin(VALVE_I_PIN, PinState.HIGH);
         pin(VALVE_II_PIN, PinState.LOW);
@@ -180,7 +193,7 @@ public class Controller {
         LogstashLogger.INSTANCE.message("Switching to boiler200");
     }
 
-    void stateSystemFailed() {
+    private void stateSystemFailed() {
         pin(SOLAR_PUMP_PIN, PinState.LOW);
         pin(VALVE_I_PIN, PinState.LOW);
         pin(VALVE_II_PIN, PinState.LOW);
@@ -194,7 +207,7 @@ public class Controller {
         LogstashLogger.INSTANCE.message("Going into fail state");
     }
 
-    void statePowerOff() {
+    private void statePowerOff() {
         pin(SOLAR_PUMP_PIN, PinState.LOW);
         pin(VALVE_I_PIN, PinState.LOW);
         pin(VALVE_II_PIN, PinState.LOW);
@@ -207,7 +220,7 @@ public class Controller {
         }
     }
 
-    void pin(Pin pin, PinState state) {
+    private void pin(Pin pin, PinState state) {
         final GpioPinDigitalOutput p = gpio.provisionDigitalOutputPin(pin, state);
         p.setShutdownOptions(true, state);
     }

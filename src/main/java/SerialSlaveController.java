@@ -90,11 +90,10 @@ public class SerialSlaveController implements SerialPortEventListener {
                     Jedis jedis = new Jedis("localhost");
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
-                    System.out.println(jedis.get("boiler200.Ttop"));
                     jedis.close();
                 }
             } catch (IOException e) {
-                System.err.println(e.toString());
+                LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB (ignoring this) " + e.toString());
             }
         }
     }
