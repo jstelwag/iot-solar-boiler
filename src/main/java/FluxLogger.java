@@ -7,14 +7,14 @@ import java.net.*;
 /**
  * Created by Jaap on 25-7-2016.
  */
-public class StateLogger {
+public class FluxLogger {
 
     final InetAddress host;
     final int port;
     final DatagramSocket socket;
     final Jedis jedis;
 
-    public StateLogger() throws SocketException, UnknownHostException {
+    public FluxLogger() throws SocketException, UnknownHostException {
         final Properties properties = new Properties();
         try {
             host = InetAddress.getByName(properties.prop.getProperty("influx.ip"));

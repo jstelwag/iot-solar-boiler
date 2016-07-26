@@ -20,7 +20,8 @@ public class ReadTemperatures {
                     double t = readDeviceTemperature(prop.prop.getProperty(key));
                     jedis.setex(key, Properties.redisExpireSeconds, String.valueOf(t));
                 } catch (IOException e) {
-                    //TODO log it
+                    LogstashLogger.INSTANCE.message("ERROR: problem reading temperature from device " + key
+                            + " " + e.toString());
                     System.out.println(e.toString() + " at sensor " + key);
                     e.printStackTrace();
                 }
@@ -28,7 +29,7 @@ public class ReadTemperatures {
         }
         jedis.close();
         if (!checkSlaveTemperatures()) {
-            // TODO do some logging
+            LogstashLogger.INSTANCE.message("The slave is not logging temperatures at the moment, I will start SerialSlaveController now");
             try {
                 new SerialSlaveController().run();
             } catch (Exception e) {

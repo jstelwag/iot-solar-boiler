@@ -7,8 +7,8 @@ public class Main {
         try {
             if (args[0].equals("ReadTemperatures")) {
                 new ReadTemperatures();
-            } else if (args[0].equals("StateLogger")) {
-                new StateLogger();
+            } else if (args[0].equals("FluxLogger")) {
+                new FluxLogger();
             } else if (args[0].equals("Controller")) {
                 new Controller();
             } else {

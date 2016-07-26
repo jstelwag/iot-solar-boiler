@@ -1,25 +1,26 @@
 import org.apache.commons.io.IOUtils;
 
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 
 public class Properties {
 
     public static final int redisExpireSeconds = 5*60;
-    public int elevation;
-    public double latitude, longitude, minAzimuth, maxAzimuth, maxZenith;
+    public final int elevation;
+    public final double latitude, longitude, minAzimuth, maxAzimuth, maxZenith;
     public final java.util.Properties prop;
 
     public Properties()  {
         InputStream inputStream = null;
         prop = new java.util.Properties();
          try {
-            inputStream = getClass().getClassLoader().getResourceAsStream("iot.properties");
+            inputStream = new FileInputStream("/etc/iot.conf");
 
             if (inputStream != null) {
                 prop.load(inputStream);
             } else {
-                throw new FileNotFoundException("property file 'iot.properties' not found in the classpath");
+                throw new FileNotFoundException("property file '/etc/iot.conf' not found");
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -33,6 +34,7 @@ public class Properties {
         minAzimuth = Double.parseDouble(prop.getProperty("sun.minAzimuth"));
         maxAzimuth = Double.parseDouble(prop.getProperty("sun.maxAzimuth"));
         maxZenith = Double.parseDouble(prop.getProperty("sun.maxZenith"));
+
 
     }
 }

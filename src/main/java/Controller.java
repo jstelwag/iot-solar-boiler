@@ -89,16 +89,17 @@ public class Controller {
             } else if (TflowIn > TflowOut) {
                 stateUnchanged();
             } else {
-                if ("boiler200".equals(jedis.get("solarState"))) {
+                if ("boiler500".equals(jedis.get("solarState"))) {
                     stateSmallBoiler();
                 } else if ("boiler200".equals(jedis.get("solarState"))) {
                     stateRecycle();
                 } else {
-                    //todo  log error
+                    LogstashLogger.INSTANCE.message("ERROR: Unexpected solar state " + jedis.get("solarState")
+                            + " I will go into recycle mode");
+                    stateRecycle();
                 }
             }
         }
-
     }
 
     void readTemperatures() throws IOException {
@@ -107,7 +108,7 @@ public class Controller {
             TflowOut = Double.parseDouble(jedis.get("pipe.TflowOut"));
         } else {
             stateSystemFailed(); //avoid overheating the pump, shut everything down
-            //TODO do logging
+            LogstashLogger.INSTANCE.message("ERROR: no temperature readings available, going into fail state");
             throw new IOException("No control temperature available");
         }
     }
@@ -134,7 +135,8 @@ public class Controller {
             pin(VALVE_I_PIN, PinState.LOW);
             pin(VALVE_II_PIN, PinState.LOW);
         } else  {
-            //TODO log error
+            LogstashLogger.INSTANCE.message("ERROR: unexpected solar state " + jedis.get("solarState")
+                    + " at the unchanged state processing");
         }
 
     }
@@ -145,6 +147,7 @@ public class Controller {
         pin(VALVE_II_PIN, PinState.HIGH);
         jedis.set("solarState", "startup");
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
+        LogstashLogger.INSTANCE.message("Going into startup state");
     }
 
     void stateRecycle() {
@@ -154,6 +157,7 @@ public class Controller {
         jedis.set("solarState", "recycle");
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
+        LogstashLogger.INSTANCE.message("Going into recycle state");
     }
 
     void stateLargeBoiler() {
@@ -163,6 +167,7 @@ public class Controller {
         jedis.set("solarState", "boiler500");
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
+        LogstashLogger.INSTANCE.message("Switching to boiler500");
     }
 
     void stateSmallBoiler() {
@@ -172,19 +177,21 @@ public class Controller {
         jedis.set("solarState", "boiler200");
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
+        LogstashLogger.INSTANCE.message("Switching to boiler200");
     }
 
     void stateSystemFailed() {
         pin(SOLAR_PUMP_PIN, PinState.LOW);
         pin(VALVE_I_PIN, PinState.LOW);
         pin(VALVE_II_PIN, PinState.LOW);
-        jedis.set("solarState", "error");
+        jedis.set("solarState", "fail");
         if (jedis.exists("lastStateChange")) {
             jedis.del("lastStateChange"); //this will force system to startup at new state change
         }
         if (jedis.exists("stateStartTflowOut")) {
             jedis.del("stateStartTflowOut");
         }
+        LogstashLogger.INSTANCE.message("Going into fail state");
     }
 
     void statePowerOff() {
@@ -257,27 +264,6 @@ public class Controller {
     boolean solarValveIstate = false;
     boolean solarValveIIstate = false;
 
-
-
-    void switchSunset(boolean newSunset) {
-        if (sunset != newSunset) {
-            sunset = newSunset;
-            logger.writeUdp("received sunset change");
-            if (sunset) {
-                logger.writeUdp(", turning solar to sleep");
-                maybeSunRetryCycles = 0;
-                noSunPumpStopTime = 0;
-//        recycleStart = 0;
-                setpoint = 0.0;
-                switchSolarPump(FALSE);
-                delay(1000);
-                recycleOn();
-            } else {
-                logger.writeUdp(", solar awake");
-            }
-            logger.postUdp();
-        }
-    }
 
     /**
      * From start first the small boiler is heated up to STAGE_ONE_TEMP. When this temperature is reached
@@ -511,36 +497,6 @@ public class Controller {
         } else {
             return rawSensorTemp;
         }
-    }
-
-    /**
-     * Switches the pin state to the current solarPumpState to the relay pin
-     * Before that it will post data to emon.
-
-    void switchSolarPump(boolean state) {
-        if (solarPumpState != state) {
-            solarPumpState = state;
-            digitalWrite(SOLAR_PUMP_RELAY_PIN, !solarPumpState);
-            logger.writeUdp("switched solar pump ");
-            if (state) {
-                logger.writeUdp("on");
-            } else {
-                logger.writeUdp("off");
-            }
-            logger.postUdp();
-        }
-    }
-
-    void setupRelays() {
-        // Initialize the relays
-        pinMode(SOLAR_PUMP_RELAY_PIN, OUTPUT);
-        digitalWrite(SOLAR_PUMP_RELAY_PIN, !solarPumpState);
-        pinMode(RECYCLE_PUMP_RELAY_PIN, OUTPUT);
-        digitalWrite(RECYCLE_PUMP_RELAY_PIN, !recyclePumpState);
-        pinMode(SOLAR_VALVE_I_RELAY_PIN, OUTPUT);
-        digitalWrite(SOLAR_VALVE_I_RELAY_PIN, !solarValveIstate);
-        pinMode(SOLAR_VALVE_II_RELAY_PIN, OUTPUT);
-        digitalWrite(SOLAR_VALVE_II_RELAY_PIN, !solarValveIIstate);
     }
     */
 }
