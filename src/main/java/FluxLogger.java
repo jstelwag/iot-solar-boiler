@@ -39,7 +39,7 @@ public class FluxLogger {
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
                 if (jedis.exists(key)) {
-                    line += line.contains("=") ? "" : "," + sensorPosition + '=' + jedis.get(key);
+                    line += line.contains("=") ? "," : "" + sensorPosition + '=' + jedis.get(key);
                 }
             }
             if (line.contains("=")) {
