@@ -16,14 +16,17 @@ public class ReadTemperatures {
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
-                try {
-                    double t = readDeviceTemperature(prop.prop.getProperty(key));
-                    jedis.setex(key, Properties.redisExpireSeconds, String.valueOf(t));
-                } catch (IOException e) {
-                    LogstashLogger.INSTANCE.message("ERROR: problem reading temperature from device " + key
-                            + " " + e.toString());
-                    System.out.println(e.toString() + " at sensor " + key);
-                    e.printStackTrace();
+                String deviceId = prop.prop.getProperty(key);
+                if (deviceId != null) {
+                    try {
+                        double t = readDeviceTemperature(deviceId);
+                        jedis.setex(key, Properties.redisExpireSeconds, String.valueOf(t));
+                    } catch (IOException e) {
+                        LogstashLogger.INSTANCE.message("ERROR: problem reading temperature from device " + key
+                                + " " + e.toString());
+                        System.out.println(e.toString() + " at sensor " + key);
+                        e.printStackTrace();
+                    }
                 }
             }
         }
