@@ -9,10 +9,10 @@ import java.net.*;
  */
 public class FluxLogger {
 
-    final InetAddress host;
-    final int port;
-    final DatagramSocket socket;
-    final Jedis jedis;
+    private final InetAddress host;
+    private final int port;
+    private final DatagramSocket socket;
+    private final Jedis jedis;
 
     public FluxLogger() throws SocketException, UnknownHostException {
         final Properties properties = new Properties();
@@ -33,13 +33,15 @@ public class FluxLogger {
         socket.close();
     }
 
-    void logTemperatures() {
+    private void logTemperatures() {
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
             String line = sensorLocation + '.' + "temperature ";
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
                 if (jedis.exists(key)) {
                     line += line.contains("=") ? "," : "" + sensorPosition + '=' + jedis.get(key);
+                } else {
+                    LogstashLogger.INSTANCE.message("WARN: no temperature for " + key);
                 }
             }
             if (line.contains("=")) {
@@ -48,7 +50,7 @@ public class FluxLogger {
         }
     }
 
-    void logState() {
+    private void logState() {
         String solarState = jedis.get("solarState");
         boolean solarOff = "solarpumpOff".equals(solarState) || "error".equals(solarState);
         String line = "solarstate,circuit=boiler500 value=";
@@ -66,7 +68,7 @@ public class FluxLogger {
         }
     }
 
-    void sunLogger() {
+    private void sunLogger() {
         Sun sun = new Sun();
         AzimuthZenithAngle position = sun.position();
         String line = "sun azimuth=" + position.getAzimuth()
@@ -75,7 +77,7 @@ public class FluxLogger {
         send(line);
     }
 
-    void send(String line) {
+    private void send(String line) {
         byte[] data = line.getBytes();
         try {
             DatagramPacket packet = new DatagramPacket(data, data.length, host, port);

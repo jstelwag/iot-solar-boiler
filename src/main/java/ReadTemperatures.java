@@ -25,7 +25,6 @@ public class ReadTemperatures {
                         LogstashLogger.INSTANCE.message("ERROR: problem reading temperature from device " + key
                                 + " " + e.toString());
                         System.out.println(e.toString() + " at sensor " + key);
-                        e.printStackTrace();
                     }
                 }
             }
