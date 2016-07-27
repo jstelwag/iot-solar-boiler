@@ -37,9 +37,6 @@ import java.util.Date;
  * Boiler L is used to accumulate excess heat from the collectors either because the sun is too strong and the small boiler over heats or
  * beacause the sun is not strong enough to reach the required temperature. The boiler is not allowed to exceed 95C, in this case the valves
  * are switched to recycle mode. The solar pump is switched off when Tin exceeds 120C.
- *
- * Solar pump control
- * todo
  */
 public class Controller {
     private final Jedis jedis;
@@ -52,6 +49,9 @@ public class Controller {
     private final static Pin RECYCLE_PUMP_PIN = RaspiPin.GPIO_06; // hot clean water recycle pump (reserved, unused)
     private final static Pin VALVE_I_PIN = RaspiPin.GPIO_07; // Large Boiler (off) | Valve II (On)
     private final static Pin VALVE_II_PIN = RaspiPin.GPIO_08; // Small Boiler (off) | Recycle (On)
+
+    private final static double MAX_FLOWOUT_TEMP = 95.0;
+    private final static long OVERHEAT_TIMEOUT_MS = 30*60*1000; //Set to 30 minutes
 
     public Controller() throws IOException {
         jedis = new Jedis("localhost");
@@ -105,11 +105,22 @@ public class Controller {
     }
 
     private void overheatCheck() {
-
+        if (!"overheat".equals(jedis.get("solarState")) && TflowOut > MAX_FLOWOUT_TEMP) {
+            jedis.set("solarState", "overheat");
+            jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
+            LogstashLogger.INSTANCE.message("Pipe temperature " + TflowOut + " is too high, shutting down");
+        }
     }
 
     private void overheatControl() {
-
+        if (new Date().getTime() - Long.valueOf(jedis.get("lastStateChange")) > OVERHEAT_TIMEOUT_MS) {
+            LogstashLogger.INSTANCE.message("Ending overheat status, switching to boiler500");
+            stateLargeBoiler();
+        } else {
+            pin(SOLAR_PUMP_PIN, PinState.LOW);
+            pin(VALVE_I_PIN, PinState.LOW);
+            pin(VALVE_II_PIN, PinState.LOW);
+        }
     }
 
     private void readTemperatures() throws IOException {
@@ -127,31 +138,45 @@ public class Controller {
     }
 
     private void stateUnchanged() {
-        if ("startup".equals(jedis.get("solarState"))) {
-            pin(SOLAR_PUMP_PIN, PinState.HIGH);
-            pin(VALVE_I_PIN, PinState.HIGH);
-            pin(VALVE_II_PIN, PinState.HIGH);
-        } else if ("recycle".equals(jedis.get("solarState"))) {
-            pin(SOLAR_PUMP_PIN, PinState.HIGH);
-            pin(VALVE_I_PIN, PinState.HIGH);
-            pin(VALVE_II_PIN, PinState.HIGH);
-        } else if ("boiler500".equals(jedis.get("solarState"))) {
-            pin(SOLAR_PUMP_PIN, PinState.HIGH);
-            pin(VALVE_I_PIN, PinState.LOW);
-            pin(VALVE_II_PIN, PinState.LOW);
-        } else if ("boiler200".equals(jedis.get("solarState"))) {
-            pin(SOLAR_PUMP_PIN, PinState.HIGH);
-            pin(VALVE_I_PIN, PinState.HIGH);
-            pin(VALVE_II_PIN, PinState.LOW);
-        } else if ("solarpumpOff".equals(jedis.get("solarState"))) {
-            pin(SOLAR_PUMP_PIN, PinState.LOW);
-            pin(VALVE_I_PIN, PinState.LOW);
-            pin(VALVE_II_PIN, PinState.LOW);
-        } else  {
-            LogstashLogger.INSTANCE.message("ERROR: unexpected solar state " + jedis.get("solarState")
-                    + " at the unchanged state processing");
+        switch (jedis.get("solarState")) {
+            case "startup":
+                pin(SOLAR_PUMP_PIN, PinState.HIGH);
+                pin(VALVE_I_PIN, PinState.HIGH);
+                pin(VALVE_II_PIN, PinState.HIGH);
+                break;
+            case "recycle":
+                pin(SOLAR_PUMP_PIN, PinState.HIGH);
+                pin(VALVE_I_PIN, PinState.HIGH);
+                pin(VALVE_II_PIN, PinState.HIGH);
+                break;
+            case "boiler500":
+                pin(SOLAR_PUMP_PIN, PinState.HIGH);
+                pin(VALVE_I_PIN, PinState.LOW);
+                pin(VALVE_II_PIN, PinState.LOW);
+                break;
+            case "boiler200":
+                pin(SOLAR_PUMP_PIN, PinState.HIGH);
+                pin(VALVE_I_PIN, PinState.HIGH);
+                pin(VALVE_II_PIN, PinState.LOW);
+                break;
+            case "solarpumpOff":
+                pin(SOLAR_PUMP_PIN, PinState.LOW);
+                pin(VALVE_I_PIN, PinState.LOW);
+                pin(VALVE_II_PIN, PinState.LOW);
+                break;
+            case "overheat":
+                pin(SOLAR_PUMP_PIN, PinState.LOW);
+                pin(VALVE_I_PIN, PinState.LOW);
+                pin(VALVE_II_PIN, PinState.LOW);
+                break;
+            default:
+                pin(SOLAR_PUMP_PIN, PinState.LOW);
+                pin(VALVE_I_PIN, PinState.LOW);
+                pin(VALVE_II_PIN, PinState.LOW);
+                LogstashLogger.INSTANCE.message("ERROR: unexpected solar state " + jedis.get("solarState")
+                        + " at the unchanged state processing. I have shut down myself for now.");
+                break;
         }
-
     }
 
     private void stateStartup() {
