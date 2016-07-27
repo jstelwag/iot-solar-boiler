@@ -12,60 +12,65 @@ import java.util.Enumeration;
  * Created by Jaap on 25-7-2016.
  */
 public class SerialSlaveController implements SerialPortEventListener {
-    SerialPort serialPort;
 
+    final boolean isRunning;
     /**
      * A BufferedReader which will be fed by a InputStreamReader
      * converting the bytes into characters
      * making the displayed results codepage independent
      */
     private BufferedReader input;
+    SerialPort serialPort;
 
     /** Milliseconds to block while waiting for port open */
     private static final int TIME_OUT = 2000;
     /** Default bits per second for COM port. */
     private static final int DATA_RATE = 9600;
 
-    public void initialize() {
-        // the next line is for Raspberry Pi and
-        // gets us into the while loop and was suggested here was suggested http://www.raspberrypi.org/phpBB3/viewtopic.php?f=81&t=32186
-        System.setProperty("gnu.io.rxtx.SerialPorts", "/dev/ttyACM0");
+    public SerialSlaveController() {
+        Jedis jedis = new Jedis("localhost");
+        isRunning = jedis.exists("boiler200.state");
+        if (!isRunning) {
+            // the next line is for Raspberry Pi and
+            // gets us into the while loop and was suggested here was suggested http://www.raspberrypi.org/phpBB3/viewtopic.php?f=81&t=32186
+            System.setProperty("gnu.io.rxtx.SerialPorts", "/dev/ttyACM0");
 
-        CommPortIdentifier portId = null;
-        Enumeration portEnum = CommPortIdentifier.getPortIdentifiers();
+            CommPortIdentifier portId = null;
+            Enumeration portEnum = CommPortIdentifier.getPortIdentifiers();
 
-        while (portEnum.hasMoreElements()) {
-            CommPortIdentifier currPortId = (CommPortIdentifier) portEnum.nextElement();
-            if (currPortId.getName().equals("/dev/ttyACM0")) {
-                portId = currPortId;
-                break;
+            while (portEnum.hasMoreElements()) {
+                CommPortIdentifier currPortId = (CommPortIdentifier) portEnum.nextElement();
+                if (currPortId.getName().equals("/dev/ttyACM0")) {
+                    portId = currPortId;
+                    break;
+                }
             }
+            if (portId == null) {
+                System.out.println("Could not find COM port.");
+                return;
+            }
+
+            try {
+                // open serial port, and use class name for the appName.
+                serialPort = (SerialPort) portId.open(this.getClass().getName(), TIME_OUT);
+
+                // set port parameters
+                serialPort.setSerialPortParams(DATA_RATE,
+                        SerialPort.DATABITS_8,
+                        SerialPort.STOPBITS_1,
+                        SerialPort.PARITY_NONE);
+
+                // open the streams
+                input = new BufferedReader(new InputStreamReader(serialPort.getInputStream()));
+
+                // add event listeners
+                serialPort.addEventListener(this);
+                serialPort.notifyOnDataAvailable(true);
+            } catch (Exception e) {
+                System.err.println(e.toString());
+            }
+            addShutdownHook();
         }
-        if (portId == null) {
-            System.out.println("Could not find COM port.");
-            return;
-        }
-
-        try {
-            // open serial port, and use class name for the appName.
-            serialPort = (SerialPort) portId.open(this.getClass().getName(), TIME_OUT);
-
-            // set port parameters
-            serialPort.setSerialPortParams(DATA_RATE,
-                    SerialPort.DATABITS_8,
-                    SerialPort.STOPBITS_1,
-                    SerialPort.PARITY_NONE);
-
-            // open the streams
-            input = new BufferedReader(new InputStreamReader(serialPort.getInputStream()));
-
-            // add event listeners
-            serialPort.addEventListener(this);
-            serialPort.notifyOnDataAvailable(true);
-        } catch (Exception e) {
-            System.err.println(e.toString());
-        }
-        addShutdownHook();
     }
 
     /**
@@ -101,13 +106,18 @@ public class SerialSlaveController implements SerialPortEventListener {
     }
 
     public void run() {
-        initialize();
-        Thread t = new Thread() {
-            public void run() {
-                try {Thread.sleep(10000);} catch (InterruptedException ie) {}
-            }
-        };
-        t.start();
+        if (!isRunning) {
+            LogstashLogger.INSTANCE.message("Starting SerialSlaveController");
+            Thread t = new Thread() {
+                public void run() {
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException ie) {
+                    }
+                }
+            };
+            t.start();
+        }
     }
 
     private void addShutdownHook() {

@@ -28,16 +28,6 @@ public class ReadTemperatures {
             }
         }
         jedis.close();
-        /*
-        if (!checkSlaveTemperatures()) {
-            LogstashLogger.INSTANCE.message("The slave is not logging temperatures at the moment, I will start SerialSlaveController now");
-            try {
-                new SerialSlaveController().run();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        */
     }
 
     double readDeviceTemperature(String deviceId) throws IOException {

@@ -14,7 +14,6 @@ public class LogstashLogger implements Closeable {
     DatagramSocket socket;
 
     private LogstashLogger() {
-        System.out.println("Starting Logstash Logger");
         final Properties properties = new Properties();
         port = Integer.parseInt(properties.prop.getProperty("logstash.port"));
         try {
@@ -35,19 +34,22 @@ public class LogstashLogger implements Closeable {
     }
 
     private void send(String message) {
-        byte[] data = message.getBytes();
-        try {
-            DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
-            socket.send(packet);
-        } catch (IOException e) {
-            System.out.println("ERROR for UDP connection " + socket.isConnected() + ", @"
-                    + host.getHostAddress() + ":" + port + ", socket " + socket.isBound() + ". For " + message);
+        if (socket != null) {
+            byte[] data = message.getBytes();
+            try {
+                DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
+                socket.send(packet);
+            } catch (IOException e) {
+                System.out.println("ERROR for UDP connection " + socket.isConnected() + ", @"
+                        + host.getHostAddress() + ":" + port + ", socket " + socket.isBound() + ". For " + message);
+            }
+        } else {
+            System.out.println("Socket for LogStash failed to initialize, cannot send message " + message);
         }
     }
 
     @Override
     public void close() {
-        System.out.println("Shutting down Logstash Logger, thank you!");
         socket.close();
     }
 
