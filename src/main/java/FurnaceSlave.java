@@ -92,6 +92,7 @@ public class FurnaceSlave implements SerialPortEventListener {
         if (oEvent.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
                 String inputLine = input.readLine();
+                LogstashLogger.INSTANCE.message(inputLine);
                 if (inputLine.contains(":")) {
                     Jedis jedis = new Jedis("localhost");
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);

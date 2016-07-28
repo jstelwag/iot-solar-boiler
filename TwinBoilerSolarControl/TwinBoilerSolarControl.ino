@@ -100,17 +100,16 @@ UdpLogger logger(sizeof(SolarProperties) + 1);
 
 const int POSTING_INTERVAL = 30000; // delay between updates, in milliseconds
 unsigned long lastPostTime;
-boolean received = false;
 EthernetClient client;
-char receiveBuffer[3];
-byte bufferPosition;
 
 // Control variables
 boolean sunset = false;
-boolean securityOverride = false;
+const long DISCONNECT_TIMOUT = 1800000;
+long lastConnectTime;
+boolean securityOverride = false; //todo implement
 float setpoint = 0.0;
 float STAGE_ONE_TEMP = 40.0;
-float STAGE_TWO_TEMP = 60.0;
+float STAGE_TWO_TEMP = 65.0;
 float STAGE_THREE_TEMP = 80.0;
 float BALANCED_INCREASE_TEMP = 5.0;
 const float COOLING_DOWN_MARGIN = 0.5;
@@ -151,38 +150,53 @@ const float MAX_SOLAR_TEMP = 100.0; //Max temp and the pump will be switched off
 const float MAX_SOLAR_THRESHOLD = 5.0; //Threshold temp for the pump to switch back on when the boiler had reached max temp
 uint32_t noSunPumpStopTime = 0;
 byte maybeSunRetryCycles = 0;
-const byte SUN_RETRY_THRESHOLD = 7;
+const byte SUN_RETRY_THRESHOLD = 25;
 const uint32_t PUMP_OFF_NO_SUN_MS = 2800000;
 
 //Recycle to prevent cooling down boilers
-/*
-long recycleStart = 0;
-float lastInTemperature;
+long recycleStartTime = 0;
+float recycleStartTemperature;
 const uint32_t COOLING_COUNT_TIMEOUT_MS = 2400000;
-const float MIN_IN_OUT_BIAS = 0.1;
-const float MIN_SOLAR_TEMP_RISE = 3.0;
-*/
+//const float MIN_IN_OUT_BIAS = 0.1;
+const float MIN_RECYCLE_TEMP_RISE = 5.0;
+
 boolean solarPumpState = false;
 boolean recyclePumpState = false;
 boolean solarValveIstate = false;
 boolean solarValveIIstate = false;
 
 void setup() {
+  #ifdef flash_props
+    IPAddress ip(10, 0, 30, 21);
+    IPAddress gateway(10, 0, 30, 1);
+    IPAddress masterController(192, 168, 178, 18);
+    SolarProperties spIn = {"koetshuis", {0xAA, 0xAA, 0xDE, 0x1E, 0xAE, 0x11}, ip, gateway, masterController, 9999};
+    EEPROM.put(0, spIn);
+  #endif
+
   SolarProperties sp;
   EEPROM.get(0, sp);
-
   IPAddress dns(8, 8, 8, 8);
   Ethernet.begin(sp.macAddress, sp.ip, dns, sp.gateway);
 
+  #ifdef has_log
+    #ifdef flash_props
+      LogProperties lp = {"SolarControl", "koetshuis", IPAddress(192, 168, 178, 101), 9000};
+      logger.flash(lp);
+    #endif
+    logger.setup();
+    logger.postUdp("start");
+  #endif
   logger.setup();
 
   setupRelays();
 
   // Start with the small boiler to settle things at startup
   logger.postUdp("start");
-  smallBoilerOn();
+  recycleOn();
   switchSolarPump(TRUE);
-  delay(15000);
+  lastConnectTime = millis(); //assume connection has been successful
+  delay(30000);
 }
 
 void loop() {
@@ -195,99 +209,107 @@ void loop() {
   
   if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
     request();
-    delay(200); //todo maybe remove
+    lastPostTime = millis();
+    //delay(200); //todo maybe remove
   }
   receive();
-  if (received) {
-    if (sunset != (receiveBuffer[0] - 48)) {
-      sunset = !sunset;
-      logger.writeUdp("received sunset change");
-      if (sunset) {
-        logger.writeUdp(", turning solar to sleep");
-//        maybeSunRetryCycles = 0;
-//        noSunPumpStopTime = 0;
-//        recycleStart = 0;
-        setpoint = 0.0;
-        switchSolarPump(FALSE);
-      } else {
-        logger.writeUdp(", solar awake");
-      }
-      logger.postUdp();
-    }
-    received = false;
+  if (millis() > lastConnectTime) {
+    lastConnectTime = millis();
+  } else if (millis() > lastConnectTime + DISCONNECT_TIMOUT) {
+    sunset = false;
+    logger.postUdp("Controller lost connection with master");
   }
 }
 
 void request() {
   client.stop();
-  bufferPosition = 0;
-  for (byte b = 0; b < sizeof(receiveBuffer); b++) {
-    receiveBuffer[b] = '\0';
-  }
-  
   SolarProperties prop;
   EEPROM.get(0, prop);
   
   if (client.connect(prop.masterIP, prop.masterPort)) {
+    client.print("POST /solar/");
     client.print(prop.name);
-    client.print(":");
-    client.print("boiler500.temperature Tbottom=");
-    client.print(sensorTll);
-    client.print(",Tmiddle=");
-    client.print(sensorTlm);
-    client.print(",Ttop=");
-    client.println(sensorTlh);
+    client.println(" HTTP/1.1");
+    client.println("Host: iot");
+    client.println("Content-Length: 211");
+    client.println(); //This line is mandatory (for a Jetty server at least)
 
-    client.print("pipe_temperature TflowIn=");
-    client.print(sensorTin);
-    client.print(",TflowOut=");
-    client.println(sensorTout);
+    client.print("boiler500.temperature Tbottom=");   //30
+    client.print(sensorTll);                          //5
+    client.print(",Tmiddle=");                        //9
+    client.print(sensorTlm);                          //5
+    client.print(",Ttop=");                           //6
+    client.println(sensorTlh);                        //5
+    
+    client.print("pipe_temperature TflowIn=");        //25
+    client.print(sensorTin);                          //5
+    client.print(",TflowOut=");                       //10
+    client.println(sensorTout);                       //5
    
-    client.print("solarstate,circuit=boiler500 value=");
-    if (solarPumpState && isLargeBoilerState()) {
+    client.print("solarstate,circuit=boiler500 value=");  //35
+    if (solarPumpState && isLargeBoilerState()) {     //1
       client.println("1");
     } else {
       client.println("0");
     }
     
-    client.print("solarstate,circuit=boiler200 value=");
-    if (solarPumpState && isSmallBoilerState()) {
-      client.println("1");
-    } else {
-      client.println("0");
-    }
+    client.print("solarstate,circuit=boiler200 value=");  //35
+    client.println((solarPumpState && isSmallBoilerState()) ? "1" : "0"); //1
     
-    client.print("solarstate,circuit=recycle value=");
-    if (solarPumpState && isRecycleState()) {
-      client.println("1");
-    } else {
-      client.println("0");
+    client.print("solarstate,circuit=recycle value=");    //33
+    client.print((solarPumpState && isRecycleState()) ? "1" : "0");  //1
+                                                       //Total 211                                
+    for (int s = 1; s < 50; s++) {      //fill up with space, the body is truncated in the server by content length
+      client.print(" ");
     }
   } else {
     client.stop();
-    Ethernet.maintain();
     logger.postUdp("request failed");
   }
-
-  lastPostTime = millis();
 }
 
 void receive() {
-  if (client.available()) {
-    logger.postUdp("receiving");
-    while (client.available()) {
-      char c = client.read();
-      if (c == 'E') {
+  boolean startReading = false;
+  boolean received = false;
+  boolean _sunset = false;
+  while (client.available()) {
+    char c = client.read();
+    if (startReading) {
+      if (c == '}') {
         client.flush();
         received = true;
+        lastConnectTime = millis();
       } else {
-        receiveBuffer[bufferPosition] = c;
-        bufferPosition++;
-      }
+        _sunset = (c == 48);
+      } 
+    } else if (c == '{') {
+      startReading = true;
     }
+  }
+  if (received) {
+    switchSunset(_sunset);
   }
 }
 
+void switchSunset(boolean newSunset) {
+  if (sunset != newSunset) {
+    sunset = newSunset;
+    logger.writeUdp("received sunset change");
+    if (sunset) {
+      logger.writeUdp(", turning solar to sleep");
+      maybeSunRetryCycles = 0;
+      noSunPumpStopTime = 0;
+//        recycleStart = 0;
+      setpoint = 0.0;
+      switchSolarPump(FALSE);
+      delay(1000);
+      recycleOn();
+    } else {
+      logger.writeUdp(", solar awake");
+    }
+    logger.postUdp();
+  }
+}
 
 /**
  * From start first the small boiler is heated up to STAGE_ONE_TEMP. When this temperature is reached
@@ -398,16 +420,17 @@ void solarValveControl() {
     }
   } else if (isRecycleState()) {
     // When the temperature is rising, switch be to small boiler
-    if (sensorTout > sensorTll) {
+    if (sensorTout > recycleStartTemperature + MIN_RECYCLE_TEMP_RISE) {
+      logger.postUdp("Recycle temp has been rising");
       largeBoilerOn();
-    }
-//Todo add a timer    
+    } else if (millis() > recycleStartTime + COOLING_COUNT_TIMEOUT_MS || millis() < recycleStartTime) {
+      logger.postUdp("Recycle time has passed");
+      largeBoilerOn();      
+    }    
 //Todo add max temp thingy
   } else {
     logger.postUdp("FAILURE: entered unknown mode");
   }
-  
-  
 }
 
 void setValves() {
@@ -423,7 +446,7 @@ void smallBoilerOn() {
     solarValveIIstate = false;
     setValves();
     logger.postUdp("valve: small boiler");
-    delay(15000); // Let things settle before doing the next reading
+    delay(30000); // Let things settle before doing the next reading
   }
 }
 boolean isSmallBoilerState() {
@@ -438,7 +461,7 @@ void largeBoilerOn() {
     //solarValveIIstate has no function here, so keeping it as it is.
     setValves();
     logger.postUdp("valve: large boiler");
-    delay(15000); // Let things settle before doing the next reading    
+    delay(30000); // Let things settle before doing the next reading    
   }
 }
 boolean isLargeBoilerState() {
@@ -453,8 +476,9 @@ void recycleOn() {
     solarValveIIstate = true;
     maybeSunRetryCycles = 1;
     setValves();
-    logger.postUdp("valve: recycle");
-    delay(15000); // Let things settle before doing the next reading   
+    logger.postUdp("valve: recycle"); 
+    recycleStartTime = millis();
+    recycleStartTemperature = sensorTin;
   }
 }
 boolean isRecycleState() {
@@ -483,7 +507,7 @@ void solarPumpControl() {
       }
 
       //When in recycle mode turn off the pump
-      if (maybeSunRetryCycles == 0 && solarValveIstate && solarValveIIstate) {
+      if (maybeSunRetryCycles == 0 && isRecycleState()) {
         logger.postUdp("no sun: pump off");
         switchSolarPump(FALSE);
         noSunPumpStopTime = millis();
