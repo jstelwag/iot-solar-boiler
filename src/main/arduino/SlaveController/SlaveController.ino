@@ -25,7 +25,7 @@
 * an Arduino, a temperature sensor and two relays (one for the furnace and one for the three-way valve).
 *
 * It is a slave. It needs to be leashed through Serial to the master which is probably a Raspberry Pi running
-* iot-solar-boiler/SerialSlaveController
+* iot-solar-boiler/FurnaceSlave
 */
 
 // Pin configuration

@@ -14,8 +14,11 @@ public class Main {
                 case "Controller":
                     new Controller();
                     break;
-                case "SerialSlave":
-                    new SerialSlaveController().run();
+                case "FurnaceSlave":
+                    new FurnaceSlave().run();
+                    break;
+                case "SolarSlave":
+                    new SolarSlave().run();
                     break;
                 default:
                     LogstashLogger.INSTANCE.message("ERROR: unknown parameter for Main " + args[0]);
