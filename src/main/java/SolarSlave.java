@@ -96,7 +96,6 @@ public class SolarSlave implements SerialPortEventListener {
         if (oEvent.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
                 String inputLine = input.readLine();
-                LogstashLogger.INSTANCE.message(inputLine);
                 if (StringUtils.countMatches(inputLine, ":") == 4) {
                     //Format: Ttop:Tmiddle:Tbottom:TflowIn:TflowOut
                     Jedis jedis = new Jedis("localhost");

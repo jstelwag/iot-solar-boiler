@@ -50,7 +50,6 @@ public class FluxLogger {
             }
             if (line.contains("=")) {
                 send(line);
-                LogstashLogger.INSTANCE.message(line);
             }
         }
     }
