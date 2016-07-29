@@ -93,7 +93,6 @@ public class FurnaceSlave implements SerialPortEventListener {
         if (oEvent.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
                 String inputLine = input.readLine();
-                LogstashLogger.INSTANCE.message(inputLine);
                 if (inputLine.startsWith("log:")) {
                     LogstashLogger.INSTANCE.message(inputLine.substring(4).trim());
                 } else if (StringUtils.countMatches(inputLine, ":") == 1) {
