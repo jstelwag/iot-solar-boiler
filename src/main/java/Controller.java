@@ -1,4 +1,3 @@
-import com.pi4j.io.gpio.*;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
@@ -40,22 +39,21 @@ import java.util.Date;
  */
 public class Controller {
     private final Jedis jedis;
-    private final GpioController gpio;
 
     private double TflowIn, TflowOut, stateStartTflowOut;
 
     private final static int STATE_CHANGE_GRACE_MILLISECONDS = 60*1000;
-    private final static Pin SOLAR_PUMP_PIN = RaspiPin.GPIO_05;
-    private final static Pin RECYCLE_PUMP_PIN = RaspiPin.GPIO_06; // hot clean water recycle pump (reserved, unused)
-    private final static Pin VALVE_I_PIN = RaspiPin.GPIO_07; // Large Boiler (off) | Valve II (On)
-    private final static Pin VALVE_II_PIN = RaspiPin.GPIO_08; // Small Boiler (off) | Recycle (On)
 
     private final static double MAX_FLOWOUT_TEMP = 95.0;
     private final static long OVERHEAT_TIMEOUT_MS = 30*60*1000; //Set to 30 minutes
 
+    private SolarState currentState;
+
     public Controller() throws IOException {
         jedis = new Jedis("localhost");
-        gpio = GpioFactory.getInstance();
+        if (jedis.exists("solarState")) {
+            currentState = SolarState.valueOf(jedis.get("solarState"));
+        }
         readTemperatures();
         overheatCheck();
         control();
@@ -64,8 +62,8 @@ public class Controller {
     private void control() {
         Sun sun = new Sun();
         if (!sun.shining()) {
-            statePowerOff();
-        } else if ("overheat".equals(jedis.get("solarState"))) {
+            stateSunset();
+        } else if (currentState == SolarState.overheat) {
             overheatControl();
         } else {
             controlOn();
@@ -80,23 +78,26 @@ public class Controller {
         if (lastStateChange == 0) {
             stateStartup();
         } else if (lastStateChange < STATE_CHANGE_GRACE_MILLISECONDS) {
-            stateUnchanged(); // After a state change, allow for the system to settle in
+            // Do nothing! After a state change, allow for the system to settle in
         } else {
-            if ("startup".equals(jedis.get("solarState"))) {
-                stateRecycle();
-            } else if ("recycle".equals(jedis.get("solarState"))) {
+            // Grace time has passed. Let's see what we can do now
+            if (currentState == SolarState.startup) {
+                stateLargeBoiler();
+            } else if (currentState == SolarState.recycle) {
                 if (TflowOut > stateStartTflowOut + 5.0) {
+                    // Recycle is heating up, try again
                     stateLargeBoiler();
                 }
             } else if (TflowIn > TflowOut) {
-                stateUnchanged();
+                // Do nothing while heat is exchanged
             } else {
-                if ("boiler500".equals(jedis.get("solarState"))) {
+                if (currentState == SolarState.boiler500) {
+                    // Large boiler is not heating up, try the smaller boiler
                     stateSmallBoiler();
-                } else if ("boiler200".equals(jedis.get("solarState"))) {
+                } else if (currentState == SolarState.boiler200) {
                     stateRecycle();
                 } else {
-                    LogstashLogger.INSTANCE.message("ERROR: Unexpected solar state " + jedis.get("solarState")
+                    LogstashLogger.INSTANCE.message("ERROR: Unexpected solar state " + currentState
                             + " I will go into recycle mode");
                     stateRecycle();
                 }
@@ -105,8 +106,8 @@ public class Controller {
     }
 
     private void overheatCheck() {
-        if (!"overheat".equals(jedis.get("solarState")) && TflowOut > MAX_FLOWOUT_TEMP) {
-            jedis.set("solarState", "overheat");
+        if (currentState != SolarState.overheat && TflowOut > MAX_FLOWOUT_TEMP) {
+            jedis.set("solarState", SolarState.overheat.name());
             jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
             LogstashLogger.INSTANCE.message("Pipe temperature " + TflowOut + " is too high, shutting down");
         }
@@ -116,10 +117,6 @@ public class Controller {
         if (new Date().getTime() - Long.valueOf(jedis.get("lastStateChange")) > OVERHEAT_TIMEOUT_MS) {
             LogstashLogger.INSTANCE.message("Ending overheat status, switching to boiler500");
             stateLargeBoiler();
-        } else {
-            pin(SOLAR_PUMP_PIN, PinState.LOW);
-            pin(VALVE_I_PIN, PinState.LOW);
-            pin(VALVE_II_PIN, PinState.LOW);
         }
     }
 
@@ -137,106 +134,47 @@ public class Controller {
         }
     }
 
-    private void stateUnchanged() {
-        switch (jedis.get("solarState")) {
-            case "startup":
-                pin(SOLAR_PUMP_PIN, PinState.HIGH);
-                pin(VALVE_I_PIN, PinState.HIGH);
-                pin(VALVE_II_PIN, PinState.HIGH);
-                break;
-            case "recycle":
-                pin(SOLAR_PUMP_PIN, PinState.HIGH);
-                pin(VALVE_I_PIN, PinState.HIGH);
-                pin(VALVE_II_PIN, PinState.HIGH);
-                break;
-            case "boiler500":
-                pin(SOLAR_PUMP_PIN, PinState.HIGH);
-                pin(VALVE_I_PIN, PinState.LOW);
-                pin(VALVE_II_PIN, PinState.LOW);
-                break;
-            case "boiler200":
-                pin(SOLAR_PUMP_PIN, PinState.HIGH);
-                pin(VALVE_I_PIN, PinState.HIGH);
-                pin(VALVE_II_PIN, PinState.LOW);
-                break;
-            case "solarpumpOff":
-                pin(SOLAR_PUMP_PIN, PinState.LOW);
-                pin(VALVE_I_PIN, PinState.LOW);
-                pin(VALVE_II_PIN, PinState.LOW);
-                break;
-            case "overheat":
-                pin(SOLAR_PUMP_PIN, PinState.LOW);
-                pin(VALVE_I_PIN, PinState.LOW);
-                pin(VALVE_II_PIN, PinState.LOW);
-                break;
-            default:
-                pin(SOLAR_PUMP_PIN, PinState.LOW);
-                pin(VALVE_I_PIN, PinState.LOW);
-                pin(VALVE_II_PIN, PinState.LOW);
-                LogstashLogger.INSTANCE.message("ERROR: unexpected solar state " + jedis.get("solarState")
-                        + " at the unchanged state processing. I have shut down myself for now.");
-                break;
-        }
-    }
-
     private void stateStartup() {
-        pin(SOLAR_PUMP_PIN, PinState.HIGH);
-        pin(VALVE_I_PIN, PinState.HIGH);
-        pin(VALVE_II_PIN, PinState.HIGH);
-        jedis.set("solarState", "startup");
+        jedis.set("solarState", SolarState.startup.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         LogstashLogger.INSTANCE.message("Going into startup state");
     }
 
     private void stateRecycle() {
-        pin(SOLAR_PUMP_PIN, PinState.HIGH);
-        pin(VALVE_I_PIN, PinState.HIGH);
-        pin(VALVE_II_PIN, PinState.HIGH);
-        jedis.set("solarState", "recycle");
+        jedis.set("solarState", SolarState.recycle.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Going into recycle state");
     }
 
     private void stateLargeBoiler() {
-        pin(SOLAR_PUMP_PIN, PinState.HIGH);
-        pin(VALVE_I_PIN, PinState.LOW);
-        pin(VALVE_II_PIN, PinState.LOW);
-        jedis.set("solarState", "boiler500");
+        jedis.set("solarState", SolarState.boiler500.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Switching to boiler500");
     }
 
     private void stateSmallBoiler() {
-        pin(SOLAR_PUMP_PIN, PinState.HIGH);
-        pin(VALVE_I_PIN, PinState.HIGH);
-        pin(VALVE_II_PIN, PinState.LOW);
-        jedis.set("solarState", "boiler200");
+        jedis.set("solarState", SolarState.boiler200.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Switching to boiler200");
     }
 
     private void stateSystemFailed() {
-        pin(SOLAR_PUMP_PIN, PinState.LOW);
-        pin(VALVE_I_PIN, PinState.LOW);
-        pin(VALVE_II_PIN, PinState.LOW);
-        jedis.set("solarState", "fail");
+        jedis.set("solarState", SolarState.error.name());
         if (jedis.exists("lastStateChange")) {
             jedis.del("lastStateChange"); //this will force system to startup at new state change
         }
         if (jedis.exists("stateStartTflowOut")) {
             jedis.del("stateStartTflowOut");
         }
-        LogstashLogger.INSTANCE.message("Going into fail state");
+        LogstashLogger.INSTANCE.message("Going into error state");
     }
 
-    private void statePowerOff() {
-        pin(SOLAR_PUMP_PIN, PinState.LOW);
-        pin(VALVE_I_PIN, PinState.LOW);
-        pin(VALVE_II_PIN, PinState.LOW);
-        jedis.set("solarState", "solarpumpOff");
+    private void stateSunset() {
+        jedis.set("solarState", SolarState.sunset.name());
+        LogstashLogger.INSTANCE.message("Going into sunset state");
         if (jedis.exists("lastStateChange")) {
             jedis.del("lastStateChange"); //this will force system to startup at new state change
         }
@@ -245,10 +183,6 @@ public class Controller {
         }
     }
 
-    private void pin(Pin pin, PinState state) {
-        final GpioPinDigitalOutput p = gpio.provisionDigitalOutputPin(pin, state);
-        p.setShutdownOptions(true, state);
-    }
 
 /*
     float setpoint = 0.0;

@@ -2,7 +2,9 @@ import gnu.io.CommPortIdentifier;
 import gnu.io.SerialPort;
 import gnu.io.SerialPortEvent;
 import gnu.io.SerialPortEventListener;
+import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
+import sun.rmi.runtime.Log;
 
 import java.io.*;
 import java.util.Enumeration;
@@ -95,13 +97,26 @@ public class SolarSlave implements SerialPortEventListener {
             try {
                 String inputLine = input.readLine();
                 LogstashLogger.INSTANCE.message(inputLine);
-                if (inputLine.contains(":")) {
+                if (StringUtils.countMatches(inputLine, ":") == 4) {
+                    //Format: Ttop:Tmiddle:Tbottom:TflowIn:TflowOut
                     Jedis jedis = new Jedis("localhost");
-                    jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
-                    jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
-                    jedis.close();
-                    output.println("200");
+                    jedis.setex("boiler500.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[0]);
+                    jedis.setex("boiler500.Tmiddle", Properties.redisExpireSeconds, inputLine.split(":")[1]);
+                    jedis.setex("boiler500.Tbottom", Properties.redisExpireSeconds, inputLine.split(":")[2]);
+                    jedis.setex("pipe.TflowIn", Properties.redisExpireSeconds, inputLine.split(":")[3]);
+                    jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
+
+                    //Response format: [ValveI][ValveII][SolarPump]
+                    if (jedis.exists("solarState")) {
+                        SolarState state = SolarState.valueOf(jedis.get("solarState"));
+                        output.println(state.line());
+                    } else {
+                        output.println(SolarState.error.line());
+                    }
                     output.flush();
+                    jedis.close();
+                } else if (inputLine.startsWith("log:")) {
+                    LogstashLogger.INSTANCE.message(inputLine.substring(4).trim());
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from SolarSlave controller: " + inputLine);
                 }

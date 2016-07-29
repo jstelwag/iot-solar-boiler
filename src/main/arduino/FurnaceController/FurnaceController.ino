@@ -58,6 +58,7 @@ void setup() {
   pinMode(FURNACE_BOILER_RELAY_PIN, OUTPUT);
   digitalWrite(FURNACE_BOILER_RELAY_PIN, !furnaceState);
   digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
+  Serial.println(F("log: furnace controller has started"));
 }
 
 void loop() {
@@ -77,6 +78,7 @@ void furnaceControl() {
       delay(2000); // wait for the valve to switch
       furnaceState = true;
       digitalWrite(FURNACE_BOILER_RELAY_PIN, !furnaceState);
+      Serial.println(F("log: switched furnace on"));
     }
   } else if (Tboiler < BOILER_STOP_TEMP && furnaceState) {
     //Keep the furnace buring
@@ -89,6 +91,7 @@ void furnaceControl() {
       delay(60000); //Let the last heat flow out
       flowValveState = false;
       digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
+      Serial.println(F("log: switched furnace off"));
     }
   }
 }
@@ -135,7 +138,7 @@ void setupSensors() {
       sensorCount++;
     }
     if (sensorCount != 1) {
-      Serial.println("error - unexpected amount of sensors");
+      Serial.println("log: ERROR: unexpected amount of sensors");
     }
   }
 }

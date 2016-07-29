@@ -2,6 +2,7 @@ import gnu.io.CommPortIdentifier;
 import gnu.io.SerialPort;
 import gnu.io.SerialPortEvent;
 import gnu.io.SerialPortEventListener;
+import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
 import java.io.*;
@@ -93,7 +94,9 @@ public class FurnaceSlave implements SerialPortEventListener {
             try {
                 String inputLine = input.readLine();
                 LogstashLogger.INSTANCE.message(inputLine);
-                if (inputLine.contains(":")) {
+                if (inputLine.startsWith("log:")) {
+                    LogstashLogger.INSTANCE.message(inputLine.substring(4).trim());
+                } else if (StringUtils.countMatches(inputLine, ":") == 1) {
                     Jedis jedis = new Jedis("localhost");
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
