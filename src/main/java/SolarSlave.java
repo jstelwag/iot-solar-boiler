@@ -101,6 +101,7 @@ public class SolarSlave implements SerialPortEventListener {
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
                     jedis.close();
                     output.println("200");
+                    output.flush();
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from SolarSlave controller: " + inputLine);
                 }
