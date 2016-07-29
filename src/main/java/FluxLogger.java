@@ -39,7 +39,7 @@ public class FluxLogger {
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
                 if (jedis.exists(key)) {
-                    line += line.contains("=") ? "," : "" + sensorPosition + '=' + jedis.get(key);
+                    line += (line.contains("=") ? "," : "") + sensorPosition + '=' + jedis.get(key);
                 } else {
                     LogstashLogger.INSTANCE.message("WARN: no temperature for " + key);
                 }
@@ -51,20 +51,24 @@ public class FluxLogger {
     }
 
     private void logState() {
-        String solarState = jedis.get("solarState");
-        boolean solarOff = "solarpumpOff".equals(solarState) || "error".equals(solarState);
-        String line = "solarstate,circuit=boiler500 value=";
-        line += solarOff ? "0" : "boiler500".equals(solarState) ? "1" : "0";
-        send(line);
-        line = "solarstate,circuit=boiler200 value=";
-        line += solarOff ? "0" : "boiler200".equals(solarState) ? "1" : "0";
-        send(line);
-        line = "solarstate,circuit=recycle value=";
-        line += solarOff ? "0" : "recycle".equals(solarState) ? "1" : "0";
-        send(line);
-        if (jedis.exists("boiler200.state")) {
-            line = "boiler200.state value=" + jedis.get("boiler200.state");
+        if (jedis.exists("solarState")) {
+            SolarState state = SolarState.valueOf(jedis.get("solarState"));
+            String line = "solarstate,circuit=boiler500 value=";
+            line += state == SolarState.boiler500 ? "1" : "0";
             send(line);
+
+            line = "solarstate,circuit=boiler200 value=";
+            line += state == SolarState.boiler200 ? "1" : "0";
+            send(line);
+
+            line = "solarstate,circuit=recycle value=";
+            line += state == SolarState.recycle ? "1" : "0";
+            send(line);
+
+            if (jedis.exists("boiler200.state")) {
+                line = "boiler200.state value=" + jedis.get("boiler200.state");
+                send(line);
+            }
         }
     }
 

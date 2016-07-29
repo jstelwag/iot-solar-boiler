@@ -102,7 +102,7 @@ public class FurnaceSlave implements SerialPortEventListener {
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
                     jedis.close();
                 } else {
-                    LogstashLogger.INSTANCE.message("ERROR: received garbage from FurnaceSlave controller: " + inputLine);
+                    LogstashLogger.INSTANCE.message("ERROR: received garbage from the Furnace micro controller: " + inputLine);
                 }
             } catch (IOException e) {
                 LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB (ignoring this) " + e.toString());

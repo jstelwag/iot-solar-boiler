@@ -136,14 +136,14 @@ void receiveFromMaster() {
     i++;
   }
 
-  if (i == 3) {
+  if (i == 4) {
     lastConnectTime = millis();
     solarPumpState = receivedStates[2];
     solarValveIstate = receivedStates[0];
     solarValveIIstate = receivedStates[1];
     setState();
   } else {
-    Serial.print(F("log: received unexpected master command"));
+    Serial.println(F("log: received unexpected master command"));
   }
 }
 

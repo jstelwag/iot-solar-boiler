@@ -15,7 +15,7 @@ import java.util.Enumeration;
  */
 public class SolarSlave implements SerialPortEventListener {
 
-    final boolean isRunning;
+    private final boolean isRunning;
     /**
      * A BufferedReader which will be fed by a InputStreamReader
      * converting the bytes into characters
@@ -23,7 +23,7 @@ public class SolarSlave implements SerialPortEventListener {
      */
     private BufferedReader input;
     private PrintWriter output;
-    SerialPort serialPort;
+    private SerialPort serialPort;
 
     /** Milliseconds to block while waiting for port open */
     private static final int TIME_OUT = 2000;
@@ -118,7 +118,7 @@ public class SolarSlave implements SerialPortEventListener {
                 } else if (inputLine.startsWith("log:")) {
                     LogstashLogger.INSTANCE.message(inputLine.substring(4).trim());
                 } else {
-                    LogstashLogger.INSTANCE.message("ERROR: received garbage from SolarSlave controller: " + inputLine);
+                    LogstashLogger.INSTANCE.message("ERROR: received garbage from the Solar micro controller: " + inputLine);
                 }
             } catch (IOException e) {
                 LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB (ignoring this) " + e.toString());
@@ -128,7 +128,7 @@ public class SolarSlave implements SerialPortEventListener {
 
     public void run() {
         if (!isRunning) {
-            LogstashLogger.INSTANCE.message("Starting FurnaceSlave");
+            LogstashLogger.INSTANCE.message("Starting SolarSlave");
             Thread t = new Thread() {
                 public void run() {
                     try {
