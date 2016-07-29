@@ -1,4 +1,5 @@
 import net.e175.klaus.solarpositioning.AzimuthZenithAngle;
+import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
@@ -16,12 +17,15 @@ public class FluxLogger {
 
     public FluxLogger() throws SocketException, UnknownHostException {
         final Properties properties = new Properties();
+        if (StringUtils.isEmpty(properties.prop.getProperty("influx.ip"))) {
+            throw new UnknownHostException("Please set up influx.ip and port in iot.conf");
+        }
         try {
             host = InetAddress.getByName(properties.prop.getProperty("influx.ip"));
             port = Integer.parseInt(properties.prop.getProperty("influx.port"));
             socket = new DatagramSocket();
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+            LogstashLogger.INSTANCE.message("ERROR: trying to set up InluxDB client for unknown host " + e.toString());
             throw e;
         }
 
@@ -46,6 +50,7 @@ public class FluxLogger {
             }
             if (line.contains("=")) {
                 send(line);
+                LogstashLogger.INSTANCE.message(line);
             }
         }
     }
@@ -69,6 +74,8 @@ public class FluxLogger {
                 line = "boiler200.state value=" + jedis.get("boiler200.state");
                 send(line);
             }
+        } else {
+            LogstashLogger.INSTANCE.message("ERROR: there is no SolarState in Redis");
         }
     }
 
@@ -87,7 +94,7 @@ public class FluxLogger {
             DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
             socket.send(packet);
         } catch (IOException e) {
-            System.out.println("ERROR for UDP connection " + socket.isConnected() + ", @"
+            LogstashLogger.INSTANCE.message("ERROR: for UDP connection " + socket.isConnected() + ", @"
                     + host.getHostAddress() + ":" + port + ", socket " + socket.isBound());
         }
     }
