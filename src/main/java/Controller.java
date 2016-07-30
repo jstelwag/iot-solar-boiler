@@ -47,6 +47,8 @@ public class Controller {
     private final static double MAX_FLOWOUT_TEMP = 95.0;
     private final static long OVERHEAT_TIMEOUT_MS = 30*60*1000; //Set to 30 minutes
 
+    private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 10.0;
+
     private SolarState currentState;
 
     public Controller() throws IOException {
@@ -89,6 +91,14 @@ public class Controller {
                     stateLargeBoiler();
                 }
             } else if (TflowIn > TflowOut) {
+                if (stateStartTflowOut + CONTROL_SWAP_BOILER_TEMP_RISE < TflowOut) {
+                    //Time to switch to another boiler
+                    if (currentState == SolarState.boiler500) {
+                        stateSmallBoiler();
+                    } else {
+                        stateLargeBoiler();
+                    }
+                }
                 // Do nothing while heat is exchanged
             } else {
                 if (currentState == SolarState.boiler500) {
@@ -106,10 +116,8 @@ public class Controller {
     }
 
     private void overheatCheck() {
-        if (currentState != SolarState.overheat && TflowOut > MAX_FLOWOUT_TEMP) {
-            jedis.set("solarState", SolarState.overheat.name());
-            jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
-            LogstashLogger.INSTANCE.message("Pipe temperature " + TflowOut + " is too high, shutting down");
+        if (TflowOut > MAX_FLOWOUT_TEMP) {
+            stateOverheat();
         }
     }
 
@@ -125,8 +133,8 @@ public class Controller {
             TflowIn = Double.parseDouble(jedis.get("pipe.TflowIn"));
             TflowOut = Double.parseDouble(jedis.get("pipe.TflowOut"));
         } else {
-            stateSystemFailed(); //avoid overheating the pump, shut everything down
-            LogstashLogger.INSTANCE.message("ERROR: no temperature readings available, going into fail state");
+            stateError(); //avoid overheating the pump, shut everything down
+            LogstashLogger.INSTANCE.message("ERROR: no temperature readings available, going into error state");
             throw new IOException("No control temperature available");
         }
         if (jedis.exists("stateStartTflowOut")) {
@@ -161,15 +169,26 @@ public class Controller {
         LogstashLogger.INSTANCE.message("Switching to boiler200");
     }
 
-    private void stateSystemFailed() {
-        jedis.set("solarState", SolarState.error.name());
-        if (jedis.exists("lastStateChange")) {
-            jedis.del("lastStateChange"); //this will force system to startup at new state change
+    private void stateError() {
+        if (currentState != SolarState.error) {
+            jedis.set("solarState", SolarState.error.name());
+            if (jedis.exists("lastStateChange")) {
+                jedis.del("lastStateChange"); //this will force system to startup at new state change
+            }
+            if (jedis.exists("stateStartTflowOut")) {
+                jedis.del("stateStartTflowOut");
+            }
+            LogstashLogger.INSTANCE.message("Going into error state");
         }
-        if (jedis.exists("stateStartTflowOut")) {
-            jedis.del("stateStartTflowOut");
+    }
+
+    private void stateOverheat() {
+        if (currentState != SolarState.overheat) {
+            jedis.set("solarState", SolarState.overheat.name());
+            jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
+            jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
+            LogstashLogger.INSTANCE.message("Going into overheat state");
         }
-        LogstashLogger.INSTANCE.message("Going into error state");
     }
 
     private void stateSunset() {
