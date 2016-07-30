@@ -173,13 +173,15 @@ public class Controller {
     }
 
     private void stateSunset() {
-        jedis.set("solarState", SolarState.sunset.name());
-        LogstashLogger.INSTANCE.message("Going into sunset state");
-        if (jedis.exists("lastStateChange")) {
-            jedis.del("lastStateChange"); //this will force system to startup at new state change
-        }
-        if (jedis.exists("stateStartTflowOut")) {
-            jedis.del("stateStartTflowOut");
+        if (currentState != SolarState.sunset) {
+            jedis.set("solarState", SolarState.sunset.name());
+            LogstashLogger.INSTANCE.message("Going into sunset state");
+            if (jedis.exists("lastStateChange")) {
+                jedis.del("lastStateChange"); //this will force system to startup at new state change
+            }
+            if (jedis.exists("stateStartTflowOut")) {
+                jedis.del("stateStartTflowOut");
+            }
         }
     }
 
