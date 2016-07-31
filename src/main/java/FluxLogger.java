@@ -69,6 +69,14 @@ public class FluxLogger {
             line += state == SolarState.recycle ? "1" : "0";
             send(line);
 
+            line = "solarstate,circuit=overheat value=";
+            line += state == SolarState.overheat ? "1" : "0";
+            send(line);
+
+            line = "solarstate,circuit=error value=";
+            line += state == SolarState.error ? "1" : "0";
+            send(line);
+
             if (jedis.exists("boiler200.state")) {
                 line = "boiler200.state value=" + jedis.get("boiler200.state");
                 send(line);
