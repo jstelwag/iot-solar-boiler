@@ -194,7 +194,7 @@ public class Controller {
     private void stateSunset() {
         if (currentState != SolarState.sunset) {
             jedis.set("solarState", SolarState.sunset.name());
-            LogstashLogger.INSTANCE.message("Going into sunset state");
+            LogstashLogger.INSTANCE.message("Going into sunset state, " + new Sun());
             if (jedis.exists("lastStateChange")) {
                 jedis.del("lastStateChange"); //this will force system to startup at new state change
             }

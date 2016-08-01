@@ -8,7 +8,12 @@ import java.util.GregorianCalendar;
  * Created by Jaap on 25-7-2016.
  */
 public class Sun {
-    final Properties prop;
+
+    private final Properties prop;
+    private final static double MIN_AZIMUTH = 90.0;
+    private final static double MAX_AZIMUTH = 290.0;
+    private final static double MAX_ZENITH = -85.0;
+
     public Sun() {
         prop = new Properties();
     }
@@ -25,11 +30,16 @@ public class Sun {
     }
 
     public boolean shining() {
-        final GregorianCalendar dateTime = new GregorianCalendar();
         AzimuthZenithAngle position = position();
-        boolean sun = position.getAzimuth() < prop.maxAzimuth
-                && position.getAzimuth() > prop.minAzimuth
-                && position.getZenithAngle() < prop.maxZenith;
-        return sun;
+        return position.getAzimuth() < MAX_AZIMUTH
+                && position.getAzimuth() > MIN_AZIMUTH
+                && position.getZenithAngle() < MAX_ZENITH;
+    }
+
+    @Override
+    public String toString() {
+        AzimuthZenithAngle position = position();
+        return "azimuth: " + position.getAzimuth() + " [" + MIN_AZIMUTH + " <> " + MAX_ZENITH + "]" +
+                ", zenith angle: " + position.getZenithAngle() + " [ < " + MAX_ZENITH + "]";
     }
 }
