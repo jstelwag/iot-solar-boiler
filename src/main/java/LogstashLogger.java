@@ -30,9 +30,12 @@ public class LogstashLogger implements Closeable {
     }
 
     public void message(String line) {
-        send("iot-solar-boiler: " + line);
+        message("iot-solar-boiler", line);
     }
 
+    public void message(String who, String line) {
+        send(who + ": " + line);
+    }
     private void send(String message) {
         if (socket != null) {
             byte[] data = message.getBytes();

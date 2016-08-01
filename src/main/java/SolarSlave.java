@@ -115,7 +115,7 @@ public class SolarSlave implements SerialPortEventListener {
                     output.flush();
                     jedis.close();
                 } else if (inputLine.startsWith("log:")) {
-                    LogstashLogger.INSTANCE.message(inputLine.substring(4).trim());
+                    LogstashLogger.INSTANCE.message("iot-solar-controller", inputLine.substring(4).trim());
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Solar micro controller: " + inputLine);
                 }
