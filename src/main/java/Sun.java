@@ -12,7 +12,7 @@ public class Sun {
     private final Properties prop;
     private final static double MIN_AZIMUTH = 90.0;
     private final static double MAX_AZIMUTH = 290.0;
-    private final static double MAX_ZENITH = -85.0;
+    private final static double MAX_ZENITH = 70.0;
 
     public Sun() {
         prop = new Properties();
@@ -39,7 +39,7 @@ public class Sun {
     @Override
     public String toString() {
         AzimuthZenithAngle position = position();
-        return "azimuth: " + position.getAzimuth() + " [" + MIN_AZIMUTH + " <> " + MAX_ZENITH + "]" +
+        return "azimuth: " + position.getAzimuth() + " [" + MIN_AZIMUTH + " <> " + MAX_AZIMUTH + "]" +
                 ", zenith angle: " + position.getZenithAngle() + " [ < " + MAX_ZENITH + "]";
     }
 }
