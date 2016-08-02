@@ -52,6 +52,7 @@ public class Controller {
     private final static long RECYCLE_TIMEOUT_OFF = 20*60*1000;
 
     private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 10.0;
+    private final static double MIN_FLOW_DELTA = 0.5;
 
     private SolarState currentState;
 
@@ -100,7 +101,7 @@ public class Controller {
                 if (lastStateChange > RECYCLE_TIMEOUT_OFF) {
                     stateRecycle();
                 }
-            } else if (TflowIn > TflowOut) {
+            } else if (TflowIn > TflowOut + MIN_FLOW_DELTA) {
                 if (stateStartTflowOut + CONTROL_SWAP_BOILER_TEMP_RISE < TflowOut) {
                     //Time to switch to another boiler
                     if (currentState == SolarState.boiler500) {
