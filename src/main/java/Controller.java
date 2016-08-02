@@ -47,6 +47,10 @@ public class Controller {
     private final static double MAX_FLOWOUT_TEMP = 95.0;
     private final static long OVERHEAT_TIMEOUT_MS = 30*60*1000; //Set to 30 minutes
 
+    private final static double RECYCLE_MAX_TEMP = 40.0;
+    private final static long RECYCLE_TIMEOUT_ON = 10*60*1000;
+    private final static long RECYCLE_TIMEOUT_OFF = 20*60*1000;
+
     private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 10.0;
 
     private SolarState currentState;
@@ -89,6 +93,12 @@ public class Controller {
                 if (TflowOut > stateStartTflowOut + 5.0) {
                     // Recycle is heating up, try again
                     stateLargeBoiler();
+                } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
+                    stateRecycleTimeout();
+                }
+            } else if (currentState == SolarState.recycleTimeout) {
+                if (lastStateChange > RECYCLE_TIMEOUT_OFF) {
+                    stateRecycle();
                 }
             } else if (TflowIn > TflowOut) {
                 if (stateStartTflowOut + CONTROL_SWAP_BOILER_TEMP_RISE < TflowOut) {
@@ -153,6 +163,13 @@ public class Controller {
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Going into recycle state");
+    }
+
+    private void stateRecycleTimeout() {
+        jedis.set("solarState", SolarState.recycleTimeout.name());
+        jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
+        jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
+        LogstashLogger.INSTANCE.message("Going into recycle timeout state");
     }
 
     private void stateLargeBoiler() {
