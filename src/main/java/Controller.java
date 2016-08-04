@@ -1,7 +1,9 @@
+import org.apache.commons.math3.stat.regression.SimpleRegression;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Solar boiler control
@@ -40,7 +42,7 @@ import java.util.Date;
 public class Controller {
     private final Jedis jedis;
 
-    private double TflowIn, TflowOut, stateStartTflowOut;
+    private double TflowIn, TflowOut, stateStartTflowOut, Tslope;
 
     private final static int STATE_CHANGE_GRACE_MILLISECONDS = 60*1000;
 
@@ -62,6 +64,7 @@ public class Controller {
             currentState = SolarState.valueOf(jedis.get("solarState"));
         }
         readTemperatures();
+        pipeTSlope();
         overheatCheck();
         control();
     }
@@ -219,6 +222,18 @@ public class Controller {
             if (jedis.exists("stateStartTflowOut")) {
                 jedis.del("stateStartTflowOut");
             }
+        }
+    }
+
+    private void pipeTSlope() {
+        if (jedis.llen("pipe.TflowSet") > 10) {
+            SimpleRegression regression = new SimpleRegression();
+            List<String> pipeTemperatures = jedis.lrange("pipe.TflowSet", 0, SolarSlave.T_SET_LENGTH);
+            for (int i = 0; i < pipeTemperatures.size(); i++) {
+                regression.addData(i, Double.parseDouble(pipeTemperatures.get(i)));
+            }
+            Tslope = regression.getSlope();
+            jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));
         }
     }
 

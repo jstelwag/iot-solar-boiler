@@ -4,7 +4,6 @@ import gnu.io.SerialPortEvent;
 import gnu.io.SerialPortEventListener;
 import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
-import sun.rmi.runtime.Log;
 
 import java.io.*;
 import java.util.Enumeration;
@@ -29,6 +28,8 @@ public class SolarSlave implements SerialPortEventListener {
     private static final int TIME_OUT = 2000;
     /** Default bits per second for COM port. */
     private static final int DATA_RATE = 9600;
+
+    public static final int T_SET_LENGTH = 30;
 
     public SolarSlave() {
         Jedis jedis = new Jedis("localhost");
@@ -104,6 +105,9 @@ public class SolarSlave implements SerialPortEventListener {
                     jedis.setex("boiler500.Tbottom", Properties.redisExpireSeconds, inputLine.split(":")[2]);
                     jedis.setex("pipe.TflowIn", Properties.redisExpireSeconds, inputLine.split(":")[3]);
                     jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
+
+                    jedis.lpush("pipe.TflowSet", inputLine.split(":")[4]);
+                    jedis.ltrim("pipe.TflowSet", 0, T_SET_LENGTH);
 
                     //Response format: [ValveI][ValveII][SolarPump]
                     if (jedis.exists("solarState")) {

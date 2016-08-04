@@ -52,6 +52,9 @@ public class FluxLogger {
                 send(line);
             }
         }
+        if (jedis.exists("pipe.Tslope")) {
+            send("pipe.Tslope value=" + jedis.get("pipe.Tslope"));
+        }
     }
 
     private void logState() {
