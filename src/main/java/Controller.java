@@ -226,11 +226,12 @@ public class Controller {
     }
 
     private void pipeTSlope() {
-        if (jedis.llen("pipe.TflowSet") > 10) {
+        if (jedis.llen("pipe.TflowSet") > 5) {
             SimpleRegression regression = new SimpleRegression();
             List<String> pipeTemperatures = jedis.lrange("pipe.TflowSet", 0, SolarSlave.T_SET_LENGTH);
-            for (int i = 0; i < pipeTemperatures.size(); i++) {
-                regression.addData(i, Double.parseDouble(pipeTemperatures.get(i)));
+            for (String pipeTemperature : pipeTemperatures) {
+                regression.addData(Double.parseDouble(pipeTemperature.split(":")[0])
+                        , Double.parseDouble(pipeTemperature.split(":")[1]));
             }
             Tslope = regression.getSlope();
             jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));

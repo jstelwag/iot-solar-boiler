@@ -15,5 +15,4 @@ public class TemperatureSensor {
         sensors.put("boiler200", new String[]{"Ttop"});
         sensors.put("pipe", new String[]{"TflowIn", "TflowOut"});
     }
-
 }
