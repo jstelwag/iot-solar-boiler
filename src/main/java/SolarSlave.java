@@ -6,6 +6,7 @@ import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
 import java.io.*;
+import java.util.Date;
 import java.util.Enumeration;
 
 
@@ -106,7 +107,7 @@ public class SolarSlave implements SerialPortEventListener {
                     jedis.setex("pipe.TflowIn", Properties.redisExpireSeconds, inputLine.split(":")[3]);
                     jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
 
-                    jedis.lpush("pipe.TflowSet", inputLine.split(":")[4]);
+                    jedis.lpush("pipe.TflowSet", ((double)new Date().getTime())/(60*60*1000) + ":" + inputLine.split(":")[4]);
                     jedis.ltrim("pipe.TflowSet", 0, T_SET_LENGTH);
 
                     //Response format: [ValveI][ValveII][SolarPump]
@@ -141,6 +142,8 @@ public class SolarSlave implements SerialPortEventListener {
                 }
             };
             t.start();
+        } else {
+            LogstashLogger.INSTANCE.message("Ending redundant SolarSlave");
         }
     }
 
