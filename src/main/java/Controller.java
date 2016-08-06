@@ -56,6 +56,8 @@ public class Controller {
     private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 10.0;
     private final static double MIN_FLOW_DELTA = 0.5;
 
+    private final static int SLOPE_WINDOW_MS = 5 * 60 * 1000;
+
     private SolarState currentState;
 
     public Controller() throws IOException {
@@ -230,11 +232,16 @@ public class Controller {
             SimpleRegression regression = new SimpleRegression();
             List<String> pipeTemperatures = jedis.lrange("pipe.TflowSet", 0, SolarSlave.T_SET_LENGTH);
             for (String pipeTemperature : pipeTemperatures) {
-                regression.addData(Double.parseDouble(pipeTemperature.split(":")[0])
-                        , Double.parseDouble(pipeTemperature.split(":")[1]));
+                long time = Long.parseLong(pipeTemperature.split(":")[0]);
+                if (time > new Date().getTime() - SLOPE_WINDOW_MS) {
+                    regression.addData((double) time, Double.parseDouble(pipeTemperature.split(":")[1]));
+                }
             }
-            Tslope = regression.getSlope();
-            jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));
+            if (regression.getN() > 5) {
+                Tslope = regression.getSlope();
+                jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));
+                jedis.setex("pipe.TstandardDeviation", Properties.redisExpireSeconds, String.valueOf(regression.getSlopeStdErr()));
+            }
         }
     }
 

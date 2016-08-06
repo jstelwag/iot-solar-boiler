@@ -14,14 +14,14 @@ import java.util.Enumeration;
  */
 public class FurnaceSlave implements SerialPortEventListener {
 
-    final boolean isRunning;
+    private final boolean isRunning;
     /**
      * A BufferedReader which will be fed by a InputStreamReader
      * converting the bytes into characters
      * making the displayed results codepage independent
      */
     private BufferedReader input;
-    SerialPort serialPort;
+    private SerialPort serialPort;
 
     /** Milliseconds to block while waiting for port open */
     private static final int TIME_OUT = 2000;
