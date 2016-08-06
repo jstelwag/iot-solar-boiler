@@ -121,6 +121,8 @@ public class FurnaceSlave implements SerialPortEventListener {
                 }
             };
             t.start();
+        } else {
+            LogstashLogger.INSTANCE.message("Ending redundant Furnace Slave");
         }
     }
 
