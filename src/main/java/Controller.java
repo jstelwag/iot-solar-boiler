@@ -232,7 +232,7 @@ public class Controller {
             SimpleRegression regression = new SimpleRegression();
             List<String> pipeTemperatures = jedis.lrange("pipe.TflowSet", 0, SolarSlave.T_SET_LENGTH);
             for (String pipeTemperature : pipeTemperatures) {
-                long time = Long.parseLong(pipeTemperature.split(":")[0]);
+                long time = (long)Double.parseDouble(pipeTemperature.split(":")[0]);
                 if (time > new Date().getTime() - SLOPE_WINDOW_MS) {
                     regression.addData((double) time, Double.parseDouble(pipeTemperature.split(":")[1]));
                 }
