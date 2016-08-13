@@ -5,9 +5,6 @@ public class Main {
     public static void main(String[] args) {
         try {
             switch (args[0]) {
-                case "ReadTemperatures":
-                    new ReadTemperatures();
-                    break;
                 case "FluxLogger":
                     new FluxLogger();
                     break;

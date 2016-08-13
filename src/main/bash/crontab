@@ -1,0 +1,11 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HOME=/home/pi
+
+* * * * * iot-runtime Controller >> $HOME/runtime.log 2>&1
+* * * * * iot-runtime FurnaceSlave >> $HOME/runtime.log 2>&1
+* * * * * iot-runtime SolarSlave >> $HOME/runtime.log 2>&1
+* * * * * iot-runtime FluxLogger >> $HOME/runtime.log 2>&1
+
+* 3 * * * iot-upgrade > $HOME/upgrade.log 2>&1
+* 4 * * * sudo reboot

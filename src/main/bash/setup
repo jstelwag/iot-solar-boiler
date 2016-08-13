@@ -1,0 +1,27 @@
+#!/bin/bash
+# respberry pi setup script for iot-solar
+# first run git clone https://github.com/jstelwag/iot-solar-boiler
+
+sudo apt-get update
+sudo apt-get -y install cron-apt rpi-update
+sudo rpi-update
+sudo apt-get -y install redis-server
+sudo apt-get -y install maven
+
+cat <<EOF >iot-upgrade
+#!/bin/bash
+cd /home/pi/iot-solar-boiler
+git update
+sh src/main/bash/iot-upgrade
+EOF
+sudo mv iot-upgrade /usr/local/bin
+sudo chmod +x /usr/local/bin/iot-upgrade
+
+cat <<EOF >iot-runtime
+#!/bin/bash
+sh /home/pi/iot-solar-boiler/src/main/bash/iot-runtime "$@"
+EOF
+sudo mv iot-runtime /usr/local/bin
+sudo chmod +x /usr/local/bin/iot-runtime
+
+

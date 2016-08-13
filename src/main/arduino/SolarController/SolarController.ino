@@ -34,7 +34,7 @@ const byte SOLAR_VALVE_I_RELAY_PIN = 5;   //Valve I, the first solar three way v
 const byte SOLAR_VALVE_II_RELAY_PIN = 6;  //Valve II, the second solar three way valve
 
 // Control variables
-const long DISCONNECT_TIMOUT = 1800000;
+const long DISCONNECT_TIMOUT = 180000;
 long lastConnectTime;
 const float COOLING_DOWN_MARGIN = 0.5;
 
@@ -125,7 +125,7 @@ void uploadToMaster() {
 }
 
 void receiveFromMaster() {
-  //line format: [T|F] [valveI][valveII][solarPump]
+  //line format: [valveI:T|F][valveII:T|F][solarPump:T|F]
   boolean receivedStates[3];
   short i = 0;
   while (Serial.available()) {
@@ -166,6 +166,8 @@ void solarValveControl() {
     } else if (millis() > recycleStartTime + COOLING_COUNT_TIMEOUT_MS || millis() < recycleStartTime) {
       largeBoilerOn();      
     }
+  } else {
+    recycleOn();
   }
 }
 
@@ -188,7 +190,7 @@ void largeBoilerOn() {
   }
 }
 boolean isLargeBoilerState() {
-  return !solarValveIstate;
+  return !solarValveIstate && solarPumpState;
 }
 
 void recycleOn() {
@@ -206,7 +208,7 @@ void recycleOn() {
   }
 }
 boolean isRecycleState() {
-  return solarValveIstate && solarValveIIstate;
+  return solarValveIstate && solarValveIIstate && solarPumpState;
 }
 
 
