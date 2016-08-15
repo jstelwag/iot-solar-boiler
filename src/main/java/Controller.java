@@ -242,7 +242,12 @@ public class Controller {
                 Tslope = regression.getSlope();
                 jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));
                 jedis.setex("pipe.TstandardDeviation", Properties.redisExpireSeconds, String.valueOf(regression.getSlopeStdErr()));
+            } else {
+                LogstashLogger.INSTANCE.message("Not enough recent observations (" + regression.getN()
+                        + ") for slope calculation");
             }
+        } else {
+            LogstashLogger.INSTANCE.message("Not yet enough observations for slope calculation");
         }
     }
 

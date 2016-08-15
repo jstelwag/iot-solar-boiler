@@ -10,8 +10,8 @@ import java.util.GregorianCalendar;
 public class Sun {
 
     private final Properties prop;
-    private final static double MIN_AZIMUTH = 90.0;
-    private final static double MAX_AZIMUTH = 290.0;
+    private final static double MIN_AZIMUTH = 95.0;
+    private final static double MAX_AZIMUTH = 300.0;
     private final static double MAX_ZENITH = 70.0;
 
     public Sun() {

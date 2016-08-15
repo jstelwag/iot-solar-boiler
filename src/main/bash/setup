@@ -8,6 +8,7 @@ sudo rpi-update
 sudo apt-get -y install redis-server
 sudo apt-get -y install maven
 sudo apt-get -y install collectd
+sudo apt-get -y install librxtx-java
 
 cat <<EOF >iot-upgrade
 #!/bin/bash
@@ -20,7 +21,8 @@ sudo chmod +x /usr/local/bin/iot-upgrade
 
 cat <<EOF >iot-runtime
 #!/bin/bash
-sh /home/pi/iot-solar-boiler/src/main/bash/iot-runtime "$@"
+sh /home/pi/iot-solar-boiler/src/main/bash/iot-runtime $@
+exit 0
 EOF
 sudo mv iot-runtime /usr/local/bin
 sudo chmod +x /usr/local/bin/iot-runtime

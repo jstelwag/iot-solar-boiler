@@ -32,7 +32,7 @@ public class SolarSlave implements SerialPortEventListener {
     /** Default bits per second for COM port. */
     private static final int DATA_RATE = 9600;
 
-    public static final int T_SET_LENGTH = 30;
+    public static final int T_SET_LENGTH = 50;
 
     public SolarSlave() {
         startTime = String.valueOf(new Date().getTime());
