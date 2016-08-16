@@ -229,9 +229,9 @@ public class Controller {
     }
 
     private void pipeTSlope() {
-        if (jedis.llen("pipe.TflowSet") >= MIN_OBSERVATIONS) {
+        if (jedis.llen("pipe.TflowSetMS") >= MIN_OBSERVATIONS) {
             SimpleRegression regression = new SimpleRegression();
-            List<String> pipeTemperatures = jedis.lrange("pipe.TflowSet", 0, SolarSlave.T_SET_LENGTH);
+            List<String> pipeTemperatures = jedis.lrange("pipe.TflowSetMS", 0, SolarSlave.T_SET_LENGTH);
             for (String pipeTemperature : pipeTemperatures) {
                 long time = (long)Double.parseDouble(pipeTemperature.split(":")[0]);
                 if (time > new Date().getTime() - SLOPE_WINDOW_MS) {
@@ -239,9 +239,10 @@ public class Controller {
                 }
             }
             if (regression.getN() >= MIN_OBSERVATIONS) {
-                Tslope = regression.getSlope();
-                jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));
-                jedis.setex("pipe.TstandardDeviation", Properties.redisExpireSeconds, String.valueOf(regression.getSlopeStdErr()));
+                Tslope = regression.getSlope()/(60*60*1000);
+                jedis.setex("pipe.Tslope_per_hr", Properties.redisExpireSeconds, String.valueOf(Tslope));
+                jedis.setex("pipe.TstandardDeviation", Properties.redisExpireSeconds
+                        , String.valueOf(regression.getSlopeStdErr()/(60*60*1000)));
             } else {
                 LogstashLogger.INSTANCE.message("Not enough recent observations (" + regression.getN()
                         + ") for slope calculation");

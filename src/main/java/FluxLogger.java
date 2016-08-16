@@ -52,7 +52,7 @@ public class FluxLogger {
                 send(line);
             }
         }
-        if (jedis.exists("pipe.Tslope")) {
+        if (jedis.exists("pipe.Tslope_per_hr")) {
             send("pipe.velocity slope=" + jedis.get("pipe.Tslope") + ",deviation=" + jedis.get("pipe.TstandardDeviation"));
         }
     }
