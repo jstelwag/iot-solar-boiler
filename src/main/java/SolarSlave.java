@@ -123,8 +123,8 @@ public class SolarSlave implements SerialPortEventListener {
                     jedis.setex("pipe.TflowIn", Properties.redisExpireSeconds, inputLine.split(":")[3]);
                     jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
 
-                    jedis.lpush("pipe.TflowSetMS", new Date().getTime() + ":" + inputLine.split(":")[4]);
-                    jedis.ltrim("pipe.TflowSetMS", 0, T_SET_LENGTH);
+                    jedis.lpush("pipe.TflowSet", new Date().getTime()/(60*60*1000) + ":" + inputLine.split(":")[4]);
+                    jedis.ltrim("pipe.TflowSet", 0, T_SET_LENGTH);
 
                     //Response format: [ValveI][ValveII][SolarPump]
                     if (jedis.exists("solarState")) {
