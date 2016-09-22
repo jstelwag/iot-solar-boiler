@@ -16,8 +16,8 @@ location.longitude=
 location.elevation=100
 influx.ip=192.168.
 influx.port=8087
-usb.furnaca=/dev/ttyACM0
-usb.solar=/dev/ttyACM1
+usb.furnace=/dev/ttyACM1
+usb.solar=/dev/ttyACM0
 logstash.ip=192.168.
 logstash.port=9000
 EOF
