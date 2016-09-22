@@ -11,6 +11,6 @@ HOME=/home/pi
 * * * * * (sleep 30 && iot-runtime FluxLogger >> $HOME/runtime.log 2>&1)
 
 * 3 * * * iot-upgrade > $HOME/upgrade.log 2>&1
-* 4 * * * sudo reboot
+0 4 * * * sudo reboot
 
 # needs newline at the end

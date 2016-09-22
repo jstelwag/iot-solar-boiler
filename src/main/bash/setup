@@ -7,8 +7,21 @@ sudo apt-get -y install cron-apt rpi-update
 sudo rpi-update
 sudo apt-get -y install redis-server
 sudo apt-get -y install maven
-sudo apt-get -y install collectd
+#sudo apt-get -y install collectd
 sudo apt-get -y install librxtx-java
+
+cat <<EOF >iot.conf
+location.latitude=
+location.longitude=
+location.elevation=100
+influx.ip=192.168.
+influx.port=8087
+usb.furnaca=/dev/ttyACM0
+usb.solar=/dev/ttyACM1
+logstash.ip=192.168.
+logstash.port=9000
+EOF
+sudo mv iot.conf /etc
 
 cat <<EOF >iot-upgrade
 #!/bin/bash
@@ -21,10 +34,14 @@ sudo chmod +x /usr/local/bin/iot-upgrade
 
 cat <<EOF >iot-runtime
 #!/bin/bash
-sh /home/pi/iot-solar-boiler/src/main/bash/iot-runtime $@
+sh /home/pi/iot-solar-boiler/src/main/bash/iot-runtime $1
 exit 0
 EOF
 sudo mv iot-runtime /usr/local/bin
 sudo chmod +x /usr/local/bin/iot-runtime
 
+iot-upgrade
 
+sudo nano /etc/iot.conf
+
+exit 0
