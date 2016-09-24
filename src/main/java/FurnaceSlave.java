@@ -24,6 +24,7 @@ public class FurnaceSlave implements SerialPortEventListener {
      * making the displayed results codepage independent
      */
     private BufferedReader input;
+    private PrintWriter output;
     private SerialPort serialPort;
 
     /** Milliseconds to block while waiting for port open */
@@ -73,6 +74,7 @@ public class FurnaceSlave implements SerialPortEventListener {
 
             // open the streams
             input = new BufferedReader(new InputStreamReader(serialPort.getInputStream()));
+            output = new PrintWriter(serialPort.getOutputStream());
 
             // add event listeners
             serialPort.addEventListener(this);
@@ -115,6 +117,13 @@ public class FurnaceSlave implements SerialPortEventListener {
                 } else if (StringUtils.countMatches(inputLine, ":") == 1) {
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
+
+                    if (jedis.exists(FurnaceMonitor.JEDIS_KEY) && "ON".equals(jedis.get(FurnaceMonitor.JEDIS_KEY))) {
+                        output.println("F:1");
+                    } else {
+                        output.println("F:0");
+                    }
+                    output.flush();
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Furnace micro controller: " + inputLine);
                 }

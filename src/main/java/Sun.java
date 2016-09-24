@@ -12,7 +12,7 @@ public class Sun {
     private final Properties prop;
     private final static double MIN_AZIMUTH = 95.0;
     private final static double MAX_AZIMUTH = 300.0;
-    private final static double MAX_ZENITH = 70.0;
+    private final static double MAX_ZENITH = 50.0;
 
     public Sun() {
         prop = new Properties();
