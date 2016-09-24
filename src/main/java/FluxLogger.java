@@ -12,8 +12,7 @@ public class FluxLogger {
 
     private final InetAddress host;
     private final int port;
-    private final DatagramSocket socket;
-    private final Jedis jedis;
+    private Jedis jedis;
 
     public FluxLogger() throws SocketException, UnknownHostException {
         final Properties properties = new Properties();
@@ -23,18 +22,18 @@ public class FluxLogger {
         try {
             host = InetAddress.getByName(properties.prop.getProperty("influx.ip"));
             port = Integer.parseInt(properties.prop.getProperty("influx.port"));
-            socket = new DatagramSocket();
         } catch (UnknownHostException e) {
             LogstashLogger.INSTANCE.message("ERROR: trying to set up InluxDB client for unknown host " + e.toString());
             throw e;
         }
+    }
 
+    public void log() {
         jedis = new Jedis("localhost");
         logState();
         logTemperatures();
         sunLogger();
         jedis.close();
-        socket.close();
     }
 
     private void logTemperatures() {
@@ -98,14 +97,19 @@ public class FluxLogger {
         send(line);
     }
 
-    private void send(String line) {
-        byte[] data = line.getBytes();
-        try {
-            DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
-            socket.send(packet);
-        } catch (IOException e) {
-            LogstashLogger.INSTANCE.message("ERROR: for UDP connection " + socket.isConnected() + ", @"
-                    + host.getHostAddress() + ":" + port + ", socket " + socket.isBound());
+    public void send(String line) {
+        try (DatagramSocket socket = new DatagramSocket()) {
+            byte[] data = line.getBytes();
+            try {
+                DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
+                socket.send(packet);
+            } catch (IOException e) {
+                LogstashLogger.INSTANCE.message("ERROR: for UDP connection " + socket.isConnected() + ", @"
+                        + host.getHostAddress() + ":" + port + ", socket " + socket.isBound());
+            }
+        } catch (SocketException e) {
+            System.out.println("Socket error " + e.toString());
+            LogstashLogger.INSTANCE.message("ERROR: unable to open socket " + e.toString());
         }
     }
 }

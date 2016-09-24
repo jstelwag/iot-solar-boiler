@@ -6,7 +6,7 @@ public class Main {
         try {
             switch (args[0]) {
                 case "FluxLogger":
-                    new FluxLogger();
+                    new FluxLogger().log();
                     break;
                 case "Controller":
                     new Controller();

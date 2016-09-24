@@ -48,6 +48,10 @@ double Tboiler;
 
 boolean furnaceState = false;  // state == false is normal heating mode
 boolean flowValveState = false; // valve == false is normal heating mode
+boolean furnaceHeatingState = false;
+
+const long DISCONNECT_TIMOUT = 180000;
+long lastConnectTime;
 
 const float BOILER_START_TEMP = 48.0;
 const float BOILER_STOP_TEMP = 53.0; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
@@ -56,8 +60,11 @@ void setup() {
   Serial.begin(9600);
   pinMode(FLOW_VALVE_RELAY_PIN, OUTPUT);
   pinMode(FURNACE_BOILER_RELAY_PIN, OUTPUT);
+  pinMode(FURNACE_HEATING_RELAY_PIN, OUTPUT);
   digitalWrite(FURNACE_BOILER_RELAY_PIN, !furnaceState);
   digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
+  digitalWrite(FURNACE_HEATING_RELAY_PIN, !furnaceHeatingState);
+  lastConnectTime = millis(); //assume connection has been successful
   Serial.println(F("log: furnace controller has started"));
 }
 
@@ -66,6 +73,8 @@ void loop() {
   readSensors();
   furnaceControl();
   logMaster();
+  receiveFromMaster();
+  furnaceHeatingControl();
 }
 
 void furnaceControl() {
@@ -96,6 +105,15 @@ void furnaceControl() {
   }
 }
 
+void furnaceHeatingControl() {
+  if (lastConnectTime + DISCONNECT_TIMOUT < millis()) {
+    //Connection lost, go to native mode
+    //TODO set to true
+    furnaceHeatingState = false;
+  }
+  digitalWrite(FURNACE_HEATING_RELAY_PIN, !furnaceHeatingState);
+}
+
 /**
 * Set the senso readings in their global variables.
 * Remove the 85C error sensors sometimes return.
@@ -110,6 +128,26 @@ void readSensors() {
 void logMaster() {
   Serial.print(furnaceState ? "1:" : "0:");
   Serial.println(Tboiler);
+}
+
+void receiveFromMaster() {
+  //line format: [F:T|F]
+  boolean receivedState;
+  short i = 0;
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (i < 1) {
+      receivedState = (c == 'T');
+    }
+    i++;
+  }
+
+  if (i == 2) {
+    lastConnectTime = millis();
+    furnaceHeatingState = receivedState;
+  } else {
+    Serial.println(F("log: received unexpected master command"));
+  }
 }
 
 /**

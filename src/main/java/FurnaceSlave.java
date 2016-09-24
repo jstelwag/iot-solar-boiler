@@ -6,6 +6,7 @@ import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
 import java.io.*;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Enumeration;
 
@@ -118,11 +119,24 @@ public class FurnaceSlave implements SerialPortEventListener {
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
 
-                    if (jedis.exists(FurnaceMonitor.JEDIS_KEY) && "ON".equals(jedis.get(FurnaceMonitor.JEDIS_KEY))) {
-                        output.println("F:1");
+                    boolean state;
+                    if (jedis.exists(FurnaceMonitor.JEDIS_KEY)) {
+                        if ("ON".equals(jedis.get(FurnaceMonitor.JEDIS_KEY))) {
+                            state = true;
+                        } else {
+                            state = false;
+                        }
                     } else {
-                        output.println("F:0");
+                        Calendar now = Calendar.getInstance();
+                        LogstashLogger.INSTANCE.message("No iot-monitor furnace state available, using month based default");
+                        if (now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9) {
+                            state = true;
+                        } else {
+                            state = false;
+                        }
                     }
+                    new FluxLogger().send("koetshuis_kelder state=" + (state ? "1"  : "0"));
+                    output.println(state ? "T" : "F");
                     output.flush();
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Furnace micro controller: " + inputLine);
