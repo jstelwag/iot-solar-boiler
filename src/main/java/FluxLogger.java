@@ -1,22 +1,26 @@
 import net.e175.klaus.solarpositioning.AzimuthZenithAngle;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.*;
 
 /**
  * Created by Jaap on 25-7-2016.
  */
-public class FluxLogger {
+public class FluxLogger implements Closeable {
 
     private final InetAddress host;
     private final int port;
     private Jedis jedis;
+    private final DatagramSocket socket;
 
     public FluxLogger() throws SocketException, UnknownHostException {
         final Properties properties = new Properties();
         if (StringUtils.isEmpty(properties.prop.getProperty("influx.ip"))) {
+            LogstashLogger.INSTANCE.message("ERROR: influx.ip setting missing from properties");
             throw new UnknownHostException("Please set up influx.ip and port in iot.conf");
         }
         try {
@@ -26,14 +30,23 @@ public class FluxLogger {
             LogstashLogger.INSTANCE.message("ERROR: trying to set up InluxDB client for unknown host " + e.toString());
             throw e;
         }
+        try {
+            socket = new DatagramSocket();
+        } catch (SocketException e) {
+            System.out.println("Socket error " + e.toString());
+            LogstashLogger.INSTANCE.message("ERROR: unable to open socket to connect to InfluxDB @" + host + ":" + port
+                    + " " + e.getMessage());
+            throw e;
+        }
     }
 
-    public void log() {
+    public FluxLogger log() {
         jedis = new Jedis("localhost");
         logState();
         logTemperatures();
         sunLogger();
         jedis.close();
+        return this;
     }
 
     private void logTemperatures() {
@@ -97,19 +110,21 @@ public class FluxLogger {
         send(line);
     }
 
-    public void send(String line) {
-        try (DatagramSocket socket = new DatagramSocket()) {
-            byte[] data = line.getBytes();
-            try {
-                DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
-                socket.send(packet);
-            } catch (IOException e) {
-                LogstashLogger.INSTANCE.message("ERROR: for UDP connection " + socket.isConnected() + ", @"
-                        + host.getHostAddress() + ":" + port + ", socket " + socket.isBound());
-            }
-        } catch (SocketException e) {
-            System.out.println("Socket error " + e.toString());
-            LogstashLogger.INSTANCE.message("ERROR: unable to open socket " + e.toString());
+    public FluxLogger send(String line) {
+        byte[] data = line.getBytes();
+        try {
+            DatagramPacket packet = new DatagramPacket(data, data.length, host, port);
+            socket.send(packet);
+        } catch (IOException e) {
+            LogstashLogger.INSTANCE.message("ERROR: for UDP connection " + socket.isConnected() + ", @"
+                    + host.getHostAddress() + ":" + port + ", socket " + socket.isBound());
         }
+
+        return this;
+    }
+
+    @Override
+    public void close() throws IOException {
+        IOUtils.closeQuietly(socket);
     }
 }

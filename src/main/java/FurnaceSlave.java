@@ -135,7 +135,7 @@ public class FurnaceSlave implements SerialPortEventListener {
                             state = false;
                         }
                     }
-                    new FluxLogger().send("koetshuis_kelder state=" + (state ? "1"  : "0"));
+                    new FluxLogger().send("koetshuis_kelder state=" + (state ? "1i"  : "0i")).close();
                     output.println(state ? "T" : "F");
                     output.flush();
                 } else {

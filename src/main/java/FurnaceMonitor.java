@@ -20,7 +20,6 @@ public class FurnaceMonitor {
     }
 
 
-
     public void run() {
         Jedis jedis = new Jedis("localhost");
         try {
@@ -32,11 +31,11 @@ public class FurnaceMonitor {
                 jedis.setex(JEDIS_KEY, TTL, "OFF");
             } else {
                 LogstashLogger.INSTANCE.message("Unexpected response iot-monitor @/furnace " + furnaceResponse);
-                jedis.del(JEDIS_KEY);
+                // Keep last state in Redis, when the TTL expires the furnace will go to the default mode
             }
         } catch (IOException e) {
             LogstashLogger.INSTANCE.message("Connection failure with iot-monitor @/furnace " + e.toString());
-            jedis.del(JEDIS_KEY);
+            // Keep last state in Redis, when the TTL expires the furnace will go to the default mode
             e.printStackTrace();
         }
         jedis.close();
