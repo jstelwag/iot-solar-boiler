@@ -125,6 +125,7 @@ public class FluxLogger implements Closeable {
 
     @Override
     public void close() throws IOException {
-        IOUtils.closeQuietly(socket);
+        if (socket != null)
+            socket.close();
     }
 }

@@ -53,8 +53,8 @@ boolean furnaceHeatingState = false;
 const long DISCONNECT_TIMOUT = 180000;
 long lastConnectTime;
 
-const float BOILER_START_TEMP = 48.0;
-const float BOILER_STOP_TEMP = 53.0; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
+const float BOILER_START_TEMP = 50.0;
+const float BOILER_STOP_TEMP = 55.0; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
 
 void setup() {
   Serial.begin(9600);
