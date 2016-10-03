@@ -231,7 +231,7 @@ public class Controller {
             List<String> pipeTemperatures = jedis.lrange("pipe.TflowSet", 0, SolarSlave.T_SET_LENGTH);
             for (String pipeTemperature : pipeTemperatures) {
                 double time = Double.parseDouble(pipeTemperature.split(":")[0]);
-                if (time > new Date().getTime()/(60*60*1000) - SLOPE_WINDOW_HR) {
+                if (time > ((double)new Date().getTime())/(60*60*1000) - SLOPE_WINDOW_HR) {
                     regression.addData(time, Double.parseDouble(pipeTemperature.split(":")[1]));
                 }
             }
