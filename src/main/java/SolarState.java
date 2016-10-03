@@ -3,9 +3,9 @@
  */
 public enum SolarState {
     sunset(false, false, false),
-    startup(true, true, true),
+    startup(true, true, true), // recycle
     recycle(true, true, true),
-    recycleTimeout(true, true, false),
+    recycleTimeout(true, true, false), //recycle with pump switched off
     boiler500(false, false, true),
     boiler200(true, false, true),
     overheat(false, false, false),

@@ -36,7 +36,7 @@ import java.util.List;
  * The central heating / solar heating mode for boiler S work independantly. Solar will heat this boiler until the max temperature of 70C
  * is reached. The lower thermometer Tsl is used to control the solar coil.
  * Boiler L is used to accumulate excess heat from the collectors either because the sun is too strong and the small boiler over heats or
- * beacause the sun is not strong enough to reach the required temperature. The boiler is not allowed to exceed 95C, in this case the valves
+ * because the sun is not strong enough to reach the required temperature. The boiler is not allowed to exceed 95C, in this case the valves
  * are switched to recycle mode. The solar pump is switched off when Tin exceeds 120C.
  */
 public class Controller {
@@ -69,21 +69,17 @@ public class Controller {
         readTemperatures();
         pipeTSlope();
         overheatCheck();
-        control();
-    }
 
-    private void control() {
-        Sun sun = new Sun();
-        if (!sun.shining()) {
+        if (!new Sun().shining()) {
             stateSunset();
         } else if (currentState == SolarState.overheat) {
             overheatControl();
         } else {
-            controlOn();
+            control();
         }
     }
 
-    private void controlOn() {
+    private void control() {
         long lastStateChange = 0;
         if (jedis.exists("lastStateChange")) {
             lastStateChange = new Date().getTime() - Long.valueOf(jedis.get("lastStateChange"));
@@ -95,11 +91,11 @@ public class Controller {
         } else {
             // Grace time has passed. Let's see what we can do now
             if (currentState == SolarState.startup) {
-                stateLargeBoiler();
+                stateSmallBoiler();
             } else if (currentState == SolarState.recycle) {
                 if (TflowOut > stateStartTflowOut + 5.0) {
                     // Recycle is heating up, try again
-                    stateLargeBoiler();
+                    stateSmallBoiler();
                 } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
                     stateRecycleTimeout();
                 }
@@ -110,18 +106,18 @@ public class Controller {
             } else if (TflowIn > TflowOut + MIN_FLOW_DELTA) {
                 if (stateStartTflowOut + CONTROL_SWAP_BOILER_TEMP_RISE < TflowOut) {
                     //Time to switch to another boiler
-                    if (currentState == SolarState.boiler500) {
-                        stateSmallBoiler();
-                    } else {
+                    if (currentState == SolarState.boiler200) {
                         stateLargeBoiler();
+                    } else {
+                        stateSmallBoiler();
                     }
                 }
                 // Do nothing while heat is exchanged
             } else {
-                if (currentState == SolarState.boiler500) {
-                    // Large boiler is not heating up, try the smaller boiler
-                    stateSmallBoiler();
-                } else if (currentState == SolarState.boiler200) {
+                if (currentState == SolarState.boiler200) {
+                    // Small boiler is not heating up, try the large boiler
+                    stateLargeBoiler();
+                } else if (currentState == SolarState.boiler500) {
                     stateRecycle();
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: Unexpected solar state " + currentState
@@ -161,7 +157,8 @@ public class Controller {
 
     private void stateStartup() {
         jedis.set("solarState", SolarState.startup.name());
-        jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
+        //Take some extra time to smooth out early morning temperature swings.
+        jedis.set("lastStateChange", String.valueOf(new Date().getTime() + 10*60*1000));
         LogstashLogger.INSTANCE.message("Going into startup state");
     }
 
