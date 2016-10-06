@@ -117,11 +117,21 @@ public class SolarSlave implements SerialPortEventListener {
                 String inputLine = input.readLine();
                 if (StringUtils.countMatches(inputLine, ":") == 4) {
                     //Format: Ttop:Tmiddle:Tbottom:TflowIn:TflowOut
-                    jedis.setex("boiler500.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[0]);
-                    jedis.setex("boiler500.Tmiddle", Properties.redisExpireSeconds, inputLine.split(":")[1]);
-                    jedis.setex("boiler500.Tbottom", Properties.redisExpireSeconds, inputLine.split(":")[2]);
-                    jedis.setex("pipe.TflowIn", Properties.redisExpireSeconds, inputLine.split(":")[3]);
-                    jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
+                    if (!TemperatureSensor.isOutlier(inputLine.split(":")[0])) {
+                        jedis.setex("boiler500.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[0]);
+                    }
+                    if (!TemperatureSensor.isOutlier(inputLine.split(":")[1])) {
+                        jedis.setex("boiler500.Tmiddle", Properties.redisExpireSeconds, inputLine.split(":")[1]);
+                    }
+                    if (!TemperatureSensor.isOutlier(inputLine.split(":")[2])) {
+                        jedis.setex("boiler500.Tbottom", Properties.redisExpireSeconds, inputLine.split(":")[2]);
+                    }
+                    if (!TemperatureSensor.isOutlier(inputLine.split(":")[3])) {
+                        jedis.setex("pipe.TflowIn", Properties.redisExpireSeconds, inputLine.split(":")[3]);
+                    }
+                    if (!TemperatureSensor.isOutlier(inputLine.split(":")[4])) {
+                        jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
+                    }
 
                     jedis.lpush("pipe.TflowSet", Double.toString(((double)new Date().getTime())/(60*60*1000))
                             + ":" + inputLine.split(":")[4]);

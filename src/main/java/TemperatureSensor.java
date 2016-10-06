@@ -1,3 +1,5 @@
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -14,5 +16,10 @@ public class TemperatureSensor {
         sensors.put("boiler500", new String[]{"Ttop", "Tmiddle", "Tbottom"});
         sensors.put("boiler200", new String[]{"Ttop"});
         sensors.put("pipe", new String[]{"TflowIn", "TflowOut"});
+    }
+
+    public static boolean isOutlier(String temperature) {
+        return !StringUtils.isNumeric(temperature)
+                || Double.parseDouble(temperature) < -5.0 || Double.parseDouble(temperature) > 120.0;
     }
 }
