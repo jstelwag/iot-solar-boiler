@@ -123,19 +123,11 @@ public class FurnaceSlave implements SerialPortEventListener {
 
                     boolean state;
                     if (jedis.exists(FurnaceMonitor.JEDIS_KEY)) {
-                        if ("ON".equals(jedis.get(FurnaceMonitor.JEDIS_KEY))) {
-                            state = true;
-                        } else {
-                            state = false;
-                        }
+                        state = "ON".equals(jedis.get(FurnaceMonitor.JEDIS_KEY));
                     } else {
                         Calendar now = Calendar.getInstance();
                         LogstashLogger.INSTANCE.message("No iot-monitor furnace state available, using month based default");
-                        if (now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9) {
-                            state = true;
-                        } else {
-                            state = false;
-                        }
+                        state = now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9;
                     }
                     new FluxLogger().send("koetshuis_kelder state=" + (state ? "1i"  : "0i")).close();
                     output.println(state ? "T" : "F");
