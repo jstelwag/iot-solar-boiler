@@ -1,4 +1,4 @@
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +19,7 @@ public class TemperatureSensor {
     }
 
     public static boolean isOutlier(String temperature) {
-        return !StringUtils.isNumeric(temperature)
+        return !NumberUtils.isParsable(temperature)
                 || Double.parseDouble(temperature) < -5.0 || Double.parseDouble(temperature) > 120.0;
     }
 }
