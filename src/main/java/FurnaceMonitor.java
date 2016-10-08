@@ -10,7 +10,8 @@ public class FurnaceMonitor {
     private final String monitorIp;
     private final int monitorPort;
 
-    public static final String JEDIS_KEY = "furnace.state";
+    public static final String FURNACE_KEY = "furnace.state";
+    public static final String PUMP_KEY = "furnace.pumpState";
     private final int TTL = 60*10;
 
     public FurnaceMonitor() {
@@ -25,14 +26,23 @@ public class FurnaceMonitor {
         try {
             String furnaceResponse = Request.Get("http://" + monitorIp +":" + monitorPort + "/furnace/koetshuis_kelder/")
                     .execute().returnContent().asString();
-            if (furnaceResponse.contains("ON")) {
-                jedis.setex(JEDIS_KEY, TTL, "ON");
+            if (furnaceResponse.contains("furnace\"=\"ON")) {
+                jedis.setex(FURNACE_KEY, TTL, "ON");
             } else if (furnaceResponse.contains("OFF")) {
-                jedis.setex(JEDIS_KEY, TTL, "OFF");
+                jedis.setex(FURNACE_KEY, TTL, "OFF");
             } else {
                 LogstashLogger.INSTANCE.message("Unexpected response iot-monitor @/furnace " + furnaceResponse);
                 // Keep last state in Redis, when the TTL expires the furnace will go to the default mode
             }
+            if (furnaceResponse.contains("pump\"=\"ON")) {
+                jedis.setex(PUMP_KEY, TTL, "ON");
+            } else if (furnaceResponse.contains("OFF")) {
+                jedis.setex(PUMP_KEY, TTL, "OFF");
+            } else {
+                LogstashLogger.INSTANCE.message("Unexpected response iot-monitor @/furnace " + furnaceResponse);
+                // Keep last state in Redis, when the TTL expires the furnace will go to the default mode
+            }
+
         } catch (IOException e) {
             LogstashLogger.INSTANCE.message("Connection failure with iot-monitor @/furnace " + e.toString());
             // Keep last state in Redis, when the TTL expires the furnace will go to the default mode

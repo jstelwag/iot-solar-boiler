@@ -121,16 +121,24 @@ public class FurnaceSlave implements SerialPortEventListener {
                         jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
                     }
 
-                    boolean state;
-                    if (jedis.exists(FurnaceMonitor.JEDIS_KEY)) {
-                        state = "ON".equals(jedis.get(FurnaceMonitor.JEDIS_KEY));
+                    boolean furnaceState;
+                    if (jedis.exists(FurnaceMonitor.FURNACE_KEY)) {
+                        furnaceState = "ON".equals(jedis.get(FurnaceMonitor.FURNACE_KEY));
                     } else {
                         Calendar now = Calendar.getInstance();
                         LogstashLogger.INSTANCE.message("No iot-monitor furnace state available, using month based default");
-                        state = now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9;
+                        furnaceState = now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9;
                     }
-                    new FluxLogger().send("koetshuis_kelder state=" + (state ? "1i"  : "0i")).close();
-                    output.println(state ? "T" : "F");
+                    new FluxLogger().send("koetshuis_kelder state=" + (furnaceState ? "1i"  : "0i")).close();
+                    output.print(furnaceState ? "T" : "F");
+                    boolean pumpState = false;
+                    if (jedis.exists(FurnaceMonitor.PUMP_KEY)) {
+                        pumpState = "ON".equals(jedis.get(FurnaceMonitor.PUMP_KEY));
+                    } else {
+                        LogstashLogger.INSTANCE.message("No iot-monitor pump state available");
+                    }
+                    new FluxLogger().send("koetshuis_kelder pumpState=" + (pumpState ? "1i"  : "0i")).close();
+                    output.println(pumpState ? "T" : "F");
                     output.flush();
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Furnace micro controller: " + inputLine);

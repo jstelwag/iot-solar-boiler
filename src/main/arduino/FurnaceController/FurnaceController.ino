@@ -35,6 +35,7 @@ const byte ONE_WIRE_PIN = 2;
 const byte FLOW_VALVE_RELAY_PIN = 5;   // a three way valve
 const byte FURNACE_BOILER_RELAY_PIN = 6;  // relay to set the furnace in boiler mode
 const byte FURNACE_HEATING_RELAY_PIN = 7;  // relay to set the furnace in heating mode
+const byte PUMP_RELAY_PIN = 8;  // relay to set the pump
 
 const float MAX_TEMP_CHANGE_THRESHOLD_85 = 0.2;
 
@@ -49,21 +50,24 @@ double Tboiler;
 boolean furnaceState = false;  // state == false is normal heating mode
 boolean flowValveState = false; // valve == false is normal heating mode
 boolean furnaceHeatingState = false;
+boolean pumpState = false;
 
 const long DISCONNECT_TIMOUT = 180000;
 long lastConnectTime;
 
 const float BOILER_START_TEMP = 50.0;
-const float BOILER_STOP_TEMP = 57.0; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
+const float BOILER_STOP_TEMP = 56.5; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
 
 void setup() {
   Serial.begin(9600);
   pinMode(FLOW_VALVE_RELAY_PIN, OUTPUT);
   pinMode(FURNACE_BOILER_RELAY_PIN, OUTPUT);
   pinMode(FURNACE_HEATING_RELAY_PIN, OUTPUT);
+  pinMode(PUMP_RELAY_PIN, OUTPUT);
   digitalWrite(FURNACE_BOILER_RELAY_PIN, !furnaceState);
   digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
   digitalWrite(FURNACE_HEATING_RELAY_PIN, !furnaceHeatingState);
+  digitalWrite(PUMP_RELAY_PIN, !pumpState);
   lastConnectTime = millis(); //assume connection has been successful
   Serial.println(F("log: furnace controller has started"));
 }
@@ -83,7 +87,9 @@ void furnaceControl() {
       //Furnace is already on
     } else {
       flowValveState = true;
+      pumpState = false;
       digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
+      digitalWrite(PUMP_RELAY_PIN, !pumpState);
       delay(2000); // wait for the valve to switch
       furnaceState = true;
       digitalWrite(FURNACE_BOILER_RELAY_PIN, !furnaceState);
@@ -110,8 +116,10 @@ void furnaceHeatingControl() {
     //Connection lost, go to native mode
     //TODO set to true
     furnaceHeatingState = false;
+    pumpState = false;
   }
   digitalWrite(FURNACE_HEATING_RELAY_PIN, !furnaceHeatingState);
+  digitalWrite(PUMP_RELAY_PIN, !pumpState);
 }
 
 /**
@@ -131,20 +139,23 @@ void logMaster() {
 }
 
 void receiveFromMaster() {
-  //line format: [F:T|F]
-  boolean receivedState;
+  //line format: [F:T|FT]
+  boolean receivedFurnaceState, receivedPumpState;
   short i = 0;
   while (Serial.available()) {
     char c = Serial.read();
-    if (i < 1) {
-      receivedState = (c == 'T');
+    if (i == 0) {
+      receivedFurnaceState = (c == 'T');
+    } else if (i == 1) {
+      receivedPumpState = (c == 'T');
     }
     i++;
   }
 
   if (i == 2) {
     lastConnectTime = millis();
-    furnaceHeatingState = receivedState;
+    furnaceHeatingState = receivedFurnaceState;
+    pumpState = receivedPumpState;
   } else {
     Serial.println(F("log: received unexpected master command"));
   }
