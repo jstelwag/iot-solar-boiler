@@ -111,7 +111,7 @@ public class FurnaceSlave implements SerialPortEventListener {
      * Handle an event on the serial port. Read the data and print it.
      */
     public synchronized void serialEvent(SerialPortEvent oEvent) {
-        Jedis jedis = new Jedis("localhost");
+        jedis = new Jedis("localhost");
         if (jedis.exists(STARTTIME) && !jedis.get(STARTTIME).equals(startTime)) {
             LogstashLogger.INSTANCE.message("Connection hijack, exiting SolarSlave");
             System.exit(0);
@@ -123,6 +123,7 @@ public class FurnaceSlave implements SerialPortEventListener {
                 if (inputLine.startsWith("log:")) {
                     LogstashLogger.INSTANCE.message("iot-furnace-controller", inputLine.substring(4).trim());
                 } else if (StringUtils.countMatches(inputLine, ":") == 1) {
+            LogstashLogger.INSTANCE.message("Start " + inputLine);
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     if (!TemperatureSensor.isOutlier(inputLine.split(":")[1])) {
                         jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
@@ -134,7 +135,8 @@ public class FurnaceSlave implements SerialPortEventListener {
                     } else {
                         Calendar now = Calendar.getInstance();
                         LogstashLogger.INSTANCE.message("No iot-monitor furnace state available, using month based default");
-                        furnaceState = now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9;
+                        furnaceState = (now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9) &&
+                                (now.get(Calendar.HOUR) < 23 && now.get(Calendar.HOUR) > 5);
                     }
 
                     boolean pumpState = false;
@@ -143,7 +145,7 @@ public class FurnaceSlave implements SerialPortEventListener {
                     } else {
                         LogstashLogger.INSTANCE.message("No iot-monitor pump state available");
                     }
-
+            LogstashLogger.INSTANCE.message("Send " + pumpState + furnaceState);
                     output.println((furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
                     output.flush();
                     LogstashLogger.INSTANCE.message("Just flushed " + (furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
