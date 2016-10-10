@@ -42,7 +42,7 @@ struct FurnaceProperties {
   uint16_t masterPort;
 };
 
-#define nflash_props // Writes property setting into eeprom memory
+#define flash_props // Writes property setting into eeprom memory
 
 EthernetClient client;
 EthernetUDP udp;
@@ -81,10 +81,11 @@ void setup() {
   digitalWrite(FLOW_VALVE_RELAY_PIN, !flowValveState);
 
   #ifdef flash_props
-    IPAddress ip(10, 0, 30, 22);
-    IPAddress gateway(10, 0, 30, 1);
+    IPAddress ip(192, 168, 178, 44);
+    IPAddress gateway(192, 178, 178, 1);
     IPAddress masterController(192, 168, 178, 18);
-    FurnaceProperties bpIn = {"boiler200", "top", {0xAE, 0xAE, 0xDE, 0x1E, 0xAE, 0x11}, ip, gateway, masterController, 9999};
+    //FurnaceProperties bpIn = {"boiler200", "top", {0xAE, 0xAE, 0xDE, 0x1E, 0xAE, 0x11}, ip, gateway, masterController, 9999};
+    FurnaceProperties bpIn = {"boiler120", "top", {0xAE, 0xAE, 0xDE, 0x1E, 0xAE, 0x09}, ip, gateway, masterController, 9999};
     EEPROM.put(0, bpIn);
   #endif
 

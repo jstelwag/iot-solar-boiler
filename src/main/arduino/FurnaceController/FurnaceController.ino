@@ -16,7 +16,6 @@
 */
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <EEPROM.h>
 
 /**
 * Simple boiler controller. Turns the furnace on and off when the preset temperature is reached.
@@ -56,7 +55,7 @@ const long DISCONNECT_TIMOUT = 180000;
 long lastConnectTime;
 
 const float BOILER_START_TEMP = 50.0;
-const float BOILER_STOP_TEMP = 56.5; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
+const float BOILER_STOP_TEMP = 56.0; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
 
 void setup() {
   Serial.begin(9600);
@@ -140,22 +139,24 @@ void logMaster() {
 
 void receiveFromMaster() {
   //line format: [F:T|FT]
-  boolean receivedFurnaceState, receivedPumpState;
+  char receivedFurnaceState, receivedPumpState;
   short i = 0;
   while (Serial.available()) {
-    char c = Serial.read();
     if (i == 0) {
-      receivedFurnaceState = (c == 'T');
+      receivedFurnaceState = Serial.read();
     } else if (i == 1) {
-      receivedPumpState = (c == 'T');
+      receivedPumpState = Serial.read();
+    } else {
+      Serial.read();
     }
     i++;
   }
 
   if (i == 2) {
     lastConnectTime = millis();
-    furnaceHeatingState = receivedFurnaceState;
-    pumpState = receivedPumpState;
+    furnaceHeatingState = (receivedFurnaceState == 'T');
+    pumpState = (receivedPumpState == 'T');
+    Serial.println(F("log: received state from master"));
   } else {
     Serial.println(F("log: received unexpected master command"));
   }
