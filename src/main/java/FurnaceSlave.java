@@ -28,6 +28,8 @@ public class FurnaceSlave implements SerialPortEventListener {
     private PrintWriter output;
     private SerialPort serialPort;
 
+    Jedis jedis;
+
     /** Milliseconds to block while waiting for port open */
     private static final int TIME_OUT = 2000;
     /** Default bits per second for COM port. */
@@ -35,13 +37,15 @@ public class FurnaceSlave implements SerialPortEventListener {
 
     public FurnaceSlave() {
         startTime = String.valueOf(new Date().getTime());
-        Jedis jedis = new Jedis("localhost");
+        jedis = new Jedis("localhost");
         if (jedis.exists(STARTTIME)) {
             LogstashLogger.INSTANCE.message("Exiting redundant FurnaceSlave");
+            jedis.close();
             System.exit(0);
         }
 
         jedis.setex(STARTTIME, TTL, startTime);
+        jedis.close();
 
         Properties prop = new Properties();
         // the next line is for Raspberry Pi and
@@ -60,7 +64,8 @@ public class FurnaceSlave implements SerialPortEventListener {
         }
         if (portId == null) {
             LogstashLogger.INSTANCE.message("ERROR: could not find USB at " + prop.prop.getProperty("usb.furnace"));
-            return;
+            close();
+            System.exit(0);
         }
 
         try {
@@ -91,7 +96,9 @@ public class FurnaceSlave implements SerialPortEventListener {
      * This will prevent port locking on platforms like Linux.
      */
     public synchronized void close() {
-        Jedis jedis = new Jedis("localhost");
+        if (jedis == null || !jedis.isConnected()) {
+            jedis = new Jedis("localhost");
+        }
         jedis.del(STARTTIME);
         jedis.close();
         if (serialPort != null) {
@@ -138,7 +145,7 @@ public class FurnaceSlave implements SerialPortEventListener {
                     }
 
                     output.println((furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
-                    //output.flush();
+                    output.flush();
                     try (FluxLogger flux = new FluxLogger()) {
                         flux.send("koetshuis_kelder state=" + (furnaceState ? "1i" : "0i"));
                         flux.send("koetshuis_kelder pumpState=" + (pumpState ? "1i" : "0i"));
@@ -147,7 +154,9 @@ public class FurnaceSlave implements SerialPortEventListener {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Furnace micro controller: " + inputLine);
                 }
             } catch (IOException e) {
-                LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB (ignoring this) " + e.toString());
+                LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB, exiting " + e.toString());
+                close();
+                System.exit(0);
             }
         }
         jedis.close();

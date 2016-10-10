@@ -27,6 +27,8 @@ public class SolarSlave implements SerialPortEventListener {
     private PrintWriter output;
     private SerialPort serialPort;
 
+    Jedis jedis;
+
     /** Milliseconds to block while waiting for port open */
     private static final int TIME_OUT = 2000;
     /** Default bits per second for COM port. */
@@ -36,14 +38,16 @@ public class SolarSlave implements SerialPortEventListener {
 
     public SolarSlave() {
         startTime = String.valueOf(new Date().getTime());
-        Jedis jedis = new Jedis("localhost");
+        jedis = new Jedis("localhost");
 
         if (jedis.exists(STARTTIME)) {
             LogstashLogger.INSTANCE.message("Exiting redundant SolarSlave");
+            jedis.close();
             System.exit(0);
         }
 
         jedis.setex(STARTTIME, TTL, startTime);
+        jedis.close();
 
         Properties prop = new Properties();
         // the next line is for Raspberry Pi and
@@ -93,7 +97,9 @@ public class SolarSlave implements SerialPortEventListener {
      * This will prevent port locking on platforms like Linux.
      */
     private synchronized void close() {
-        Jedis jedis = new Jedis("localhost");
+        if (jedis == null || !jedis.isConnected()) {
+            jedis = new Jedis("localhost");
+        }
         jedis.del(STARTTIME);
         jedis.close();
         if (serialPort != null) {
@@ -106,7 +112,7 @@ public class SolarSlave implements SerialPortEventListener {
      * Handle an event on the serial port. Read the data and print it.
      */
     public synchronized void serialEvent(SerialPortEvent oEvent) {
-        Jedis jedis = new Jedis("localhost");
+        jedis = new Jedis("localhost");
         if (jedis.exists(STARTTIME) && !jedis.get(STARTTIME).equals(startTime)) {
             LogstashLogger.INSTANCE.message("Connection hijack, exiting SolarSlave");
             System.exit(0);
@@ -151,7 +157,9 @@ public class SolarSlave implements SerialPortEventListener {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Solar micro controller: " + inputLine);
                 }
             } catch (IOException e) {
-                LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB (ignoring this) " + e.toString());
+                LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB,i will kill myself" + e.toString());
+                close();
+                System.exit(0);
             }
         }
         jedis.close();

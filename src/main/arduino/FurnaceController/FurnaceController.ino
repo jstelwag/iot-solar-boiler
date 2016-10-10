@@ -48,7 +48,7 @@ double Tboiler;
 
 boolean furnaceState = false;  // state == false is normal heating mode
 boolean flowValveState = false; // valve == false is normal heating mode
-boolean furnaceHeatingState = false;
+boolean furnaceHeatingState = true;
 boolean pumpState = false;
 
 const long DISCONNECT_TIMOUT = 180000;
@@ -69,6 +69,7 @@ void setup() {
   digitalWrite(FURNACE_HEATING_RELAY_PIN, !furnaceHeatingState);
   digitalWrite(PUMP_RELAY_PIN, !pumpState);
   lastConnectTime = millis(); //assume connection has been successful
+  lastPostTime = POSTING_INTERVAL; //force immediate post
   Serial.println(F("log: furnace controller has started"));
 }
 
@@ -118,7 +119,7 @@ void furnaceHeatingControl() {
   if (lastConnectTime + DISCONNECT_TIMOUT < millis()) {
     //Connection lost, go to native mode
     //TODO set to true
-    furnaceHeatingState = false;
+    furnaceHeatingState = true;
     pumpState = false;
     Serial.println(F("log:not receiving from master"));
   }
