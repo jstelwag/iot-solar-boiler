@@ -115,6 +115,7 @@ public class SolarSlave implements SerialPortEventListener {
         jedis = new Jedis("localhost");
         if (jedis.exists(STARTTIME) && !jedis.get(STARTTIME).equals(startTime)) {
             LogstashLogger.INSTANCE.message("Connection hijack, exiting SolarSlave");
+            jedis.close();
             System.exit(0);
         }
         jedis.setex(STARTTIME, TTL, startTime);

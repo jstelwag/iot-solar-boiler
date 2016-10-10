@@ -25,7 +25,6 @@ public class FurnaceSlave implements SerialPortEventListener {
      * making the displayed results codepage independent
      */
     private BufferedReader input;
-    private PrintWriter output;
     private SerialPort serialPort;
 
     Jedis jedis;
@@ -80,7 +79,6 @@ public class FurnaceSlave implements SerialPortEventListener {
 
             // open the streams
             input = new BufferedReader(new InputStreamReader(serialPort.getInputStream()));
-            output = new PrintWriter(serialPort.getOutputStream());
 
             // add event listeners
             serialPort.addEventListener(this);
@@ -114,6 +112,7 @@ public class FurnaceSlave implements SerialPortEventListener {
         jedis = new Jedis("localhost");
         if (jedis.exists(STARTTIME) && !jedis.get(STARTTIME).equals(startTime)) {
             LogstashLogger.INSTANCE.message("Connection hijack, exiting SolarSlave");
+            jedis.close();
             System.exit(0);
         }
         jedis.setex(STARTTIME, TTL, startTime);
@@ -123,7 +122,6 @@ public class FurnaceSlave implements SerialPortEventListener {
                 if (inputLine.startsWith("log:")) {
                     LogstashLogger.INSTANCE.message("iot-furnace-controller", inputLine.substring(4).trim());
                 } else if (StringUtils.countMatches(inputLine, ":") == 1) {
-            LogstashLogger.INSTANCE.message("Start " + inputLine);
                     jedis.setex("boiler200.state", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     if (!TemperatureSensor.isOutlier(inputLine.split(":")[1])) {
                         jedis.setex("boiler200.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[1]);
@@ -145,9 +143,16 @@ public class FurnaceSlave implements SerialPortEventListener {
                     } else {
                         LogstashLogger.INSTANCE.message("No iot-monitor pump state available");
                     }
-            LogstashLogger.INSTANCE.message("Send " + pumpState + furnaceState);
-                    output.println((furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
-                    output.flush();
+                    try {
+                        //PrintWriter output = new PrintWriter(serialPort.getOutputStream());
+                        serialPort.getOutputStream().write(furnaceState ? 'T' : 'F');
+                        serialPort.getOutputStream().write(pumpState ? 'T' : 'F');
+                        serialPort.getOutputStream().flush();
+                        //output.println((furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
+                        //output.flush();
+                    } catch (IOException e) {
+                        LogstashLogger.INSTANCE.message("ERROR: writing to controller");
+                    }
                     LogstashLogger.INSTANCE.message("Just flushed " + (furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
                     try (FluxLogger flux = new FluxLogger()) {
                         flux.send("koetshuis_kelder state=" + (furnaceState ? "1i" : "0i"));
