@@ -130,7 +130,6 @@ public class FurnaceSlave implements SerialPortEventListener {
                         furnaceState = now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9;
                     }
 
-                    String response = furnaceState ? "T" : "F";
                     boolean pumpState = false;
                     if (jedis.exists(FurnaceMonitor.PUMP_KEY)) {
                         pumpState = "ON".equals(jedis.get(FurnaceMonitor.PUMP_KEY));
@@ -138,10 +137,8 @@ public class FurnaceSlave implements SerialPortEventListener {
                         LogstashLogger.INSTANCE.message("No iot-monitor pump state available");
                     }
 
-                    response += pumpState ? "T" : "F";
-                    output.println(response);
-                    output.flush();
-                    LogstashLogger.INSTANCE.message("INFO: send " + response + " to furnace slave");
+                    output.println((furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
+                    //output.flush();
                     try (FluxLogger flux = new FluxLogger()) {
                         flux.send("koetshuis_kelder state=" + (furnaceState ? "1i" : "0i"));
                         flux.send("koetshuis_kelder pumpState=" + (pumpState ? "1i" : "0i"));

@@ -52,7 +52,8 @@ boolean furnaceHeatingState = false;
 boolean pumpState = false;
 
 const long DISCONNECT_TIMOUT = 180000;
-long lastConnectTime;
+const long POSTING_INTERVAL = 30000;
+long lastConnectTime, lastPostTime;
 
 const float BOILER_START_TEMP = 50.0;
 const float BOILER_STOP_TEMP = 56.0; // Depends on the furnace setting, Nefit is set to 60C, take a lower value for the boiler temperature.
@@ -75,7 +76,10 @@ void loop() {
   setupSensors();
   readSensors();
   furnaceControl();
-  logMaster();
+  if (millis() > lastPostTime + POSTING_INTERVAL || millis() < lastPostTime) {
+    lastPostTime = millis();
+    logMaster();
+  }
   receiveFromMaster();
   furnaceHeatingControl();
 }
@@ -116,6 +120,7 @@ void furnaceHeatingControl() {
     //TODO set to true
     furnaceHeatingState = false;
     pumpState = false;
+    Serial.println(F("log:not receiving from master"));
   }
   digitalWrite(FURNACE_HEATING_RELAY_PIN, !furnaceHeatingState);
   digitalWrite(PUMP_RELAY_PIN, !pumpState);
@@ -157,7 +162,7 @@ void receiveFromMaster() {
     furnaceHeatingState = (receivedFurnaceState == 'T');
     pumpState = (receivedPumpState == 'T');
     Serial.println(F("log: received state from master"));
-  } else {
+  } else if (i > 0) {
     Serial.println(F("log: received unexpected master command"));
   }
 }
