@@ -138,7 +138,7 @@ void logMaster() {
 }
 
 void receiveFromMaster() {
-  //line format: [F:T|FT]
+  //line format: [furnace: T|F][pump: T|F]
   char receivedFurnaceState, receivedPumpState;
   short i = 0;
   while (Serial.available()) {

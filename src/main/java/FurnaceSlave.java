@@ -129,7 +129,7 @@ public class FurnaceSlave implements SerialPortEventListener {
                         LogstashLogger.INSTANCE.message("No iot-monitor furnace state available, using month based default");
                         furnaceState = now.get(Calendar.MONTH) < 4 || now.get(Calendar.MONTH) > 9;
                     }
-                    new FluxLogger().send("koetshuis_kelder state=" + (furnaceState ? "1i"  : "0i")).close();
+
                     String response = furnaceState ? "T" : "F";
                     boolean pumpState = false;
                     if (jedis.exists(FurnaceMonitor.PUMP_KEY)) {
@@ -137,11 +137,15 @@ public class FurnaceSlave implements SerialPortEventListener {
                     } else {
                         LogstashLogger.INSTANCE.message("No iot-monitor pump state available");
                     }
-                    new FluxLogger().send("koetshuis_kelder pumpState=" + (pumpState ? "1i"  : "0i")).close();
+
                     response += pumpState ? "T" : "F";
-                    LogstashLogger.INSTANCE.message("INFO: sending " + response + " to furnace slave");
                     output.println(response);
                     output.flush();
+                    LogstashLogger.INSTANCE.message("INFO: send " + response + " to furnace slave");
+                    try (FluxLogger flux = new FluxLogger()) {
+                        flux.send("koetshuis_kelder state=" + (furnaceState ? "1i" : "0i"));
+                        flux.send("koetshuis_kelder pumpState=" + (pumpState ? "1i" : "0i"));
+                    }
                 } else {
                     LogstashLogger.INSTANCE.message("ERROR: received garbage from the Furnace micro controller: " + inputLine);
                 }
