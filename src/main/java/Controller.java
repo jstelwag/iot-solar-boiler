@@ -55,7 +55,7 @@ public class Controller {
     private final static long RECYCLE_TIMEOUT_ON = 10*60*1000;
     private final static long RECYCLE_TIMEOUT_OFF = 20*60*1000;
 
-    private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 10.0;
+    private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 5.0;
     private final static double MIN_FLOW_DELTA = 0.5;
     private final static double LARGE_FLOW_DELTA_THRESHOLD = 2.0; //Meaning, sun is shining strong
 

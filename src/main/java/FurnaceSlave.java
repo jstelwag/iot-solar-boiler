@@ -146,6 +146,7 @@ public class FurnaceSlave implements SerialPortEventListener {
 
                     output.println((furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
                     output.flush();
+                    LogstashLogger.INSTANCE.message("Just flushed " + (furnaceState ? "T" : "F") + (pumpState ? "T" : "F"));
                     try (FluxLogger flux = new FluxLogger()) {
                         flux.send("koetshuis_kelder state=" + (furnaceState ? "1i" : "0i"));
                         flux.send("koetshuis_kelder pumpState=" + (pumpState ? "1i" : "0i"));

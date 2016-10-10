@@ -166,6 +166,7 @@ void receiveFromMaster() {
   } else if (i > 0) {
     Serial.println(F("log: received unexpected master command"));
   }
+  Serial.println(F("log: master receive"));
 }
 
 /**
