@@ -91,11 +91,6 @@ public class FluxLogger implements Closeable {
             line = "solarstate,circuit=error value=";
             line += state == SolarState.error ? "1" : "0";
             send(line);
-
-            if (jedis.exists("boiler200.state")) {
-                line = "boiler200.state value=" + jedis.get("boiler200.state");
-                send(line);
-            }
         } else {
             LogstashLogger.INSTANCE.message("ERROR: there is no SolarState in Redis");
         }
