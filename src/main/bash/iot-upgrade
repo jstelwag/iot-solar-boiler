@@ -2,6 +2,5 @@
 cd /home/pi/iot-solar-boiler
 
 /usr/bin/mvn clean install
-/usr/bin/crontab src/main/bash/crontab
 
 exit 0

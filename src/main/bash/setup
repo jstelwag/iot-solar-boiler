@@ -1,6 +1,7 @@
 #!/bin/bash
 # respberry pi setup script for iot-solar
 # first run git clone https://github.com/jstelwag/iot-solar-boiler
+# and git clone https://github.com/jstelwag/iot-furnace
 
 sudo apt-get update
 sudo apt-get -y remove exim4-base exim4-config exim4-daemon-light sonic-pi
@@ -21,7 +22,7 @@ location.longitude=
 location.elevation=100
 influx.ip=192.168.
 influx.port=8087
-usb.furnace=/dev/ttyACM1
+usb.furnace=/dev/ttyUSB0
 usb.solar=/dev/ttyACM0
 logstash.ip=192.168.
 logstash.port=9000
@@ -35,17 +36,31 @@ cat <<EOF >iot-upgrade
 cd /home/pi/iot-solar-boiler
 git pull
 sh src/main/bash/iot-upgrade
+
+cd /home/pi/iot-furnace
+git pull
+sh src/main/bash/iot-upgrade
+
+/usr/bin/crontab /home/pi/iot-solar-boiler/src/main/bash/crontab
 EOF
 sudo mv iot-upgrade /usr/local/bin
 sudo chmod +x /usr/local/bin/iot-upgrade
 
-cat <<EOF >iot-runtime
+cat <<EOF >iot-solar
 #!/bin/bash
-sh /home/pi/iot-solar-boiler/src/main/bash/iot-runtime $1
+sh /home/pi/iot-solar-boiler/src/main/bash/iot-solar $1
 exit 0
 EOF
-sudo mv iot-runtime /usr/local/bin
-sudo chmod +x /usr/local/bin/iot-runtime
+sudo mv iot-solar /usr/local/bin
+sudo chmod +x /usr/local/bin/iot-solar
+
+cat <<EOF >iot-furnace
+#!/bin/bash
+sh /home/pi/iot-furnace/src/main/bash/iot-furnace $1
+exit 0
+EOF
+sudo mv iot-furnace /usr/local/bin
+sudo chmod +x /usr/local/bin/iot-furnace
 
 iot-upgrade
 

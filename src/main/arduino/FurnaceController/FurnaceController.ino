@@ -162,11 +162,11 @@ void receiveFromMaster() {
     lastConnectTime = millis();
     furnaceHeatingState = (receivedFurnaceState == 'T');
     pumpState = (receivedPumpState == 'T');
-    Serial.println(F("log: received state from master"));
   } else if (i > 0) {
     Serial.println(F("log: received unexpected master command"));
+    Serial.end();
+    Serial.begin(9600);
   }
-  Serial.println(F("log: master receive"));
 }
 
 /**

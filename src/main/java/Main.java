@@ -11,12 +11,6 @@ public class Main {
                 case "Controller":
                     new Controller();
                     break;
-                case "FurnaceSlave":
-                    new FurnaceSlave().run();
-                    break;
-                case "FurnaceMonitor":
-                    new FurnaceMonitor().run();
-                    break;
                 case "SolarSlave":
                     new SolarSlave().run();
                     break;

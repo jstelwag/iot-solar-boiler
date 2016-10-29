@@ -24,7 +24,6 @@ public class SolarSlave implements SerialPortEventListener {
      * making the displayed results codepage independent
      */
     private BufferedReader input;
-    private PrintWriter output;
     private SerialPort serialPort;
 
     Jedis jedis;
@@ -81,7 +80,6 @@ public class SolarSlave implements SerialPortEventListener {
 
             // open the streams
             input = new BufferedReader(new InputStreamReader(serialPort.getInputStream()));
-            output = new PrintWriter(serialPort.getOutputStream());
 
             // add event listeners
             serialPort.addEventListener(this);
@@ -144,14 +142,20 @@ public class SolarSlave implements SerialPortEventListener {
                             + ":" + inputLine.split(":")[4]);
                     jedis.ltrim("pipe.TflowSet", 0, T_SET_LENGTH);
 
-                    //Response format: [ValveI][ValveII][SolarPump]
-                    if (jedis.exists("solarState")) {
-                        SolarState state = SolarState.valueOf(jedis.get("solarState"));
-                        output.println(state.line());
-                    } else {
-                        output.println(SolarState.error.line());
+                    try {
+                        //Response format: [ValveI][ValveII][SolarPump]
+                        if (jedis.exists("solarState")) {
+                            SolarState state = SolarState.valueOf(jedis.get("solarState"));
+                            serialPort.getOutputStream().write(state.line());
+                        } else {
+                            serialPort.getOutputStream().write(SolarState.error.line());
+                        }
+                        serialPort.getOutputStream().flush();
+                    } catch (IOException e) {
+                        LogstashLogger.INSTANCE.message("ERROR: writing to solar controller");
+                        close();
+                        System.exit(0);
                     }
-                    output.flush();
                 } else if (inputLine.startsWith("log:")) {
                     LogstashLogger.INSTANCE.message("iot-solar-controller", inputLine.substring(4).trim());
                 } else {

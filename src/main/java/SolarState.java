@@ -19,7 +19,8 @@ public enum SolarState {
         this.solarPump = solarPump;
     }
 
-    public String line() {
-        return (valveOne ? "T" : "F") + (valveTwo ? "T" : "F") + (solarPump ? "T" : "F");
+    public byte[] line() {
+        byte[] retVal = {(byte)(valveOne ? 'T' : 'F'), (byte)(valveTwo ? 'T' : 'F'), (byte)(solarPump ? 'T' : 'F')};
+        return retVal;
     }
 }
