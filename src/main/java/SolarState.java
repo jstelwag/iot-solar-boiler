@@ -9,6 +9,7 @@ public enum SolarState {
     boiler500(false, false, true),
     boiler200(true, false, true),
     overheat(false, false, false),
+    defrost(false, false, true), //flow through large boiler to avoid freezing
     error(false, false, false);
 
     public boolean valveOne, valveTwo, solarPump;

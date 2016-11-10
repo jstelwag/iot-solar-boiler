@@ -2,6 +2,7 @@ import org.apache.commons.math3.stat.regression.SimpleRegression;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -72,8 +73,13 @@ public class Controller {
         readTemperatures();
         pipeTSlope();
         overheatCheck();
+        if (defrostCheck()) {
+            stateDefrost();
+        }
 
-        if (!new Sun().shining()) {
+        if (currentState == SolarState.defrost) {
+            checkDefrost();
+        } else if (!new Sun().shining()) {
             stateSunset();
         } else if (currentState == SolarState.overheat) {
             overheatControl();
@@ -138,56 +144,6 @@ public class Controller {
         }
     }
 
-    @Deprecated
-    private void controlDeprecated() {
-        long lastStateChange = 0;
-        if (jedis.exists("lastStateChange")) {
-            lastStateChange = new Date().getTime() - Long.valueOf(jedis.get("lastStateChange"));
-        }
-        if (lastStateChange == 0) {
-            stateStartup();
-        } else if (lastStateChange < STATE_CHANGE_GRACE_MILLISECONDS) {
-            // Do nothing! After a state change, allow for the system to settle in
-        } else {
-            // Grace time has passed. Let's see what we can do now
-            if (currentState == SolarState.startup) {
-                stateSmallBoiler();
-            } else if (currentState == SolarState.recycle) {
-                if (TflowOut > stateStartTflowOut + 5.0) {
-                    // Recycle is heating up, try again
-                    stateSmallBoiler();
-                } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
-                    stateRecycleTimeout();
-                }
-            } else if (currentState == SolarState.recycleTimeout) {
-                if (lastStateChange > RECYCLE_TIMEOUT_OFF) {
-                    stateRecycle();
-                }
-            } else if (TflowIn > TflowOut + MIN_FLOW_DELTA) {
-                if (stateStartTflowOut + CONTROL_SWAP_BOILER_TEMP_RISE < TflowOut) {
-                    //Time to switch to another boiler
-                    if (currentState == SolarState.boiler200) {
-                        stateLargeBoiler();
-                    } else {
-                        stateSmallBoiler();
-                    }
-                }
-                // Do nothing while heat is exchanged
-            } else {
-                if (currentState == SolarState.boiler200) {
-                    // Small boiler is not heating up, try the large boiler
-                    stateLargeBoiler();
-                } else if (currentState == SolarState.boiler500) {
-                    stateRecycle();
-                } else {
-                    LogstashLogger.INSTANCE.message("ERROR: Unexpected solar state " + currentState
-                            + " I will go into recycle mode");
-                    stateRecycle();
-                }
-            }
-        }
-    }
-
     private void overheatCheck() {
         if (TflowOut > MAX_FLOWOUT_TEMP) {
             stateOverheat();
@@ -198,6 +154,18 @@ public class Controller {
         if (new Date().getTime() - Long.valueOf(jedis.get("lastStateChange")) > OVERHEAT_TIMEOUT_MS) {
             LogstashLogger.INSTANCE.message("Ending overheat status, switching to boiler500");
             stateLargeBoiler();
+        }
+    }
+
+    private boolean defrostCheck() {
+        Calendar now = Calendar.getInstance();
+        return now.get(Calendar.HOUR) < 7);
+    }
+
+    private void checkDefrost() {
+        if (!defrostCheck()) {
+            LogstashLogger.INSTANCE.message("Ending defrost status, switching to startup");
+            stateStartup();
         }
     }
 
@@ -269,6 +237,15 @@ public class Controller {
             jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
             jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
             LogstashLogger.INSTANCE.message("Going into overheat state");
+        }
+    }
+
+    private void stateDefrost() {
+        if (currentState != SolarState.defrost) {
+            jedis.set("solarState", SolarState.defrost.name());
+            jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
+            jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
+            LogstashLogger.INSTANCE.message("Going into defrost state");
         }
     }
 

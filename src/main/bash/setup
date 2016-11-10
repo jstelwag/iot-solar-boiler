@@ -17,6 +17,7 @@ sudo apt-get -y install maven
 sudo apt-get -y install librxtx-java
 
 cat <<EOF >iot.conf
+iot.id=
 location.latitude=
 location.longitude=
 location.elevation=100
