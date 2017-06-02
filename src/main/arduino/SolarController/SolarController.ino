@@ -121,7 +121,13 @@ void uploadToMaster() {
   Serial.print(':');
   Serial.print(sensorTin);
   Serial.print(':');
-  Serial.println(sensorTout);
+  Serial.print(sensorTout);
+  Serial.print(':');
+  Serial.print(solarValveIstate ? 'T' : 'F');
+  Serial.print(':');
+  Serial.print(solarValveIIstate ? 'T' : 'F');
+  Serial.print(':');
+  Serial.println(solarPumpState ? 'T' : 'F');
 }
 
 void receiveFromMaster() {
@@ -136,7 +142,7 @@ void receiveFromMaster() {
     i++;
   }
 
-  if (i == 4) {
+  if (i == 3) {
     lastConnectTime = millis();
     solarPumpState = receivedStates[2];
     solarValveIstate = receivedStates[0];

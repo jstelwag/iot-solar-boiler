@@ -20,6 +20,18 @@ public enum SolarState {
         this.solarPump = solarPump;
     }
 
+    public static SolarState principalState(boolean valveI, boolean valveII, boolean pump) {
+        if (!valveI && !valveII && !pump) {
+            return sunset;
+        } else if (!valveI && !valveII){
+            return boiler500;
+        } else if (!valveII){
+            return boiler200;
+        } else {
+            return recycle;
+        }
+    }
+
     public byte[] line() {
         byte[] retVal = {(byte)(valveOne ? 'T' : 'F'), (byte)(valveTwo ? 'T' : 'F'), (byte)(solarPump ? 'T' : 'F')};
         return retVal;

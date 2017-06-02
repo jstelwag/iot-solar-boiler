@@ -94,6 +94,10 @@ public class FluxLogger implements Closeable {
         } else {
             LogstashLogger.INSTANCE.message("ERROR: there is no SolarState in Redis");
         }
+        if (jedis.exists("solarStateReal")) {
+            String line = "solarstate.real,circuit=" + jedis.get("solarStateReal") + " value=1";
+            send(line);
+        }
     }
 
     private void sunLogger() {

@@ -120,8 +120,8 @@ public class SolarSlave implements SerialPortEventListener {
         if (oEvent.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
                 String inputLine = input.readLine();
-                if (StringUtils.countMatches(inputLine, ":") == 4) {
-                    //Format: Ttop:Tmiddle:Tbottom:TflowIn:TflowOut
+                if (StringUtils.countMatches(inputLine, ":") == 7) {
+                    //Format: Ttop:Tmiddle:Tbottom:TflowIn:TflowOut:SvalveI:SvalveII:Spump
                     if (!TemperatureSensor.isOutlier(inputLine.split(":")[0])) {
                         jedis.setex("boiler500.Ttop", Properties.redisExpireSeconds, inputLine.split(":")[0]);
                     }
@@ -137,6 +137,10 @@ public class SolarSlave implements SerialPortEventListener {
                     if (!TemperatureSensor.isOutlier(inputLine.split(":")[4])) {
                         jedis.setex("pipe.TflowOut", Properties.redisExpireSeconds, inputLine.split(":")[4]);
                     }
+                    jedis.setex("solarStateReal", Properties.redisExpireSeconds, SolarState.principalState(
+                            "T".equals(inputLine.split(":")[5])
+                            ,"T".equals(inputLine.split(":")[6])
+                            , "T".equals(inputLine.split(":")[7])).name());
 
                     jedis.lpush("pipe.TflowSet", Double.toString(((double)new Date().getTime())/(60*60*1000))
                             + ":" + inputLine.split(":")[4]);
