@@ -32,8 +32,8 @@ public class SolarSlave implements SerialPortEventListener {
     private static final int TIME_OUT = 2000;
     /** Default bits per second for COM port. */
     private static final int DATA_RATE = 9600;
-
-    public static final int T_SET_LENGTH = 50;
+    /** Set length is number of measurements in window (times 2 to be certain you have enough) */
+    public static final int T_SET_LENGTH = (int)Controller.SLOPE_WINDOW_HR*60*60*2*2;
 
     public SolarSlave() {
         startTime = String.valueOf(new Date().getTime());

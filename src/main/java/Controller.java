@@ -60,8 +60,8 @@ public class Controller {
     private final static double MIN_FLOW_DELTA = 0.5;
     private final static double LARGE_FLOW_DELTA_THRESHOLD = 2.0; //Meaning, sun is shining strong
 
-    private final static double SLOPE_WINDOW_HR = 0.1;
-    private final static int MIN_OBSERVATIONS = 5;
+    public final static double SLOPE_WINDOW_HR = 0.5;
+    public final static int MIN_OBSERVATIONS = 10;
 
     private SolarState currentState;
 
