@@ -1,5 +1,4 @@
 import net.e175.klaus.solarpositioning.AzimuthZenithAngle;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.Jedis;
 
@@ -71,32 +70,12 @@ public class FluxLogger implements Closeable {
 
     private void logState() {
         if (jedis.exists("solarState")) {
-            SolarState state = SolarState.valueOf(jedis.get("solarState"));
-            String line = "solarstate,circuit=boiler500 value=";
-            line += state == SolarState.boiler500 ? "1" : "0";
-            send(line);
-
-            line = "solarstate,circuit=boiler200 value=";
-            line += state == SolarState.boiler200 ? "1" : "0";
-            send(line);
-
-            line = "solarstate,circuit=recycle value=";
-            line += state == SolarState.recycle ? "1" : "0";
-            send(line);
-
-            line = "solarstate,circuit=overheat value=";
-            line += state == SolarState.overheat ? "1" : "0";
-            send(line);
-
-            line = "solarstate,circuit=error value=";
-            line += state == SolarState.error ? "1" : "0";
-            send(line);
+            send("solarstate,circuit=" + jedis.get("solarState") + " value=1");
         } else {
             LogstashLogger.INSTANCE.message("ERROR: there is no SolarState in Redis");
         }
         if (jedis.exists("solarStateReal")) {
-            String line = "solarstate.real,circuit=" + jedis.get("solarStateReal") + " value=1";
-            send(line);
+            send("solarstate.real,circuit=" + jedis.get("solarStateReal") + " value=1");
         }
     }
 

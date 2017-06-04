@@ -43,7 +43,7 @@ import java.util.List;
 public class Controller {
     private final Jedis jedis;
 
-    private double TflowIn, TflowOut, stateStartTflowOut, Tslope;
+    private double TflowIn, TflowOut, stateStartTflowOut;
 
     private final static int STATE_CHANGE_GRACE_MILLISECONDS = 60*1000;
 
@@ -61,7 +61,7 @@ public class Controller {
     private final static double LARGE_FLOW_DELTA_THRESHOLD = 2.0; //Meaning, sun is shining strong
 
     public final static double SLOPE_WINDOW_HR = 0.5;
-    public final static int MIN_OBSERVATIONS = 10;
+    public final static int MIN_OBSERVATIONS = 20;
 
     private SolarState currentState;
 
@@ -189,6 +189,7 @@ public class Controller {
         //Take some extra time to smooth out early morning temperature swings.
         jedis.set("lastStateChange", String.valueOf(new Date().getTime() + 10*60*1000));
         LogstashLogger.INSTANCE.message("Going into startup state");
+        resetTSlope();
     }
 
     private void stateRecycle() {
@@ -196,6 +197,7 @@ public class Controller {
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Going into recycle state");
+        resetTSlope();
     }
 
     private void stateRecycleTimeout() {
@@ -203,6 +205,7 @@ public class Controller {
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Going into recycle timeout state");
+        resetTSlope();
     }
 
     private void stateLargeBoiler() {
@@ -210,6 +213,7 @@ public class Controller {
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Switching to boiler500");
+        resetTSlope();
     }
 
     private void stateSmallBoiler() {
@@ -217,6 +221,7 @@ public class Controller {
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
         LogstashLogger.INSTANCE.message("Switching to boiler200");
+        resetTSlope();
     }
 
     private void stateError() {
@@ -229,6 +234,7 @@ public class Controller {
                 jedis.del("stateStartTflowOut");
             }
             LogstashLogger.INSTANCE.message("Going into error state");
+            resetTSlope();
         }
     }
 
@@ -238,6 +244,7 @@ public class Controller {
             jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
             jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
             LogstashLogger.INSTANCE.message("Going into overheat state");
+            resetTSlope();
         }
     }
 
@@ -247,6 +254,7 @@ public class Controller {
             jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
             jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
             LogstashLogger.INSTANCE.message("Going into defrost state");
+            resetTSlope();
         }
     }
 
@@ -261,6 +269,7 @@ public class Controller {
                 jedis.del("stateStartTflowOut");
             }
         }
+        resetTSlope();
     }
 
     private void pipeTSlope() {
@@ -274,8 +283,7 @@ public class Controller {
                 }
             }
             if (regression.getN() >= MIN_OBSERVATIONS) {
-                Tslope = regression.getSlope();
-                jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(Tslope));
+                jedis.setex("pipe.Tslope", Properties.redisExpireSeconds, String.valueOf(regression.getSlope()));
                 jedis.setex("pipe.TstandardDeviation", Properties.redisExpireSeconds
                         , String.valueOf(regression.getSlopeStdErr()));
             } else {
@@ -285,6 +293,10 @@ public class Controller {
         } else {
             LogstashLogger.INSTANCE.message("Not yet enough observations for slope calculation");
         }
+    }
+
+    private void resetTSlope() {
+        jedis.del("pipe.TflowSet");
     }
 
 
