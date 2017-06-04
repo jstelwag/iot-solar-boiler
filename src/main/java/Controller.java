@@ -56,7 +56,7 @@ public class Controller {
     private final static long RECYCLE_TIMEOUT_ON = 10*60*1000;
     private final static long RECYCLE_TIMEOUT_OFF = 20*60*1000;
 
-    private final static double CONTROL_SWAP_BOILER_TEMP_RISE = 5.0;
+    private final static double SWAP_BOILER_TEMP_RISE = 5.0;
     private final static double MIN_FLOW_DELTA = 0.5;
     private final static double LARGE_FLOW_DELTA_THRESHOLD = 2.0; //Meaning, sun is shining strong
 
@@ -95,16 +95,13 @@ public class Controller {
         }
         if (lastStateChange == 0) {
             stateStartup();
-        } else if (lastStateChange < STATE_CHANGE_GRACE_MILLISECONDS) {
-            // Do nothing! After a state change, allow for the system to settle in
-        } else {
-            // Grace time has passed. Let's see what we can do now
+        } else if (lastStateChange > STATE_CHANGE_GRACE_MILLISECONDS) {
             if (currentState == SolarState.startup) {
-                stateSmallBoiler();
+                stateLargeBoiler();
             } else if (currentState == SolarState.recycle) {
-                if (TflowOut > stateStartTflowOut + 5.0) {
+                if (TflowOut > stateStartTflowOut + 4.0) {
                     // Recycle is heating up, try again
-                    stateSmallBoiler();
+                    stateLargeBoiler();
                 } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
                     stateRecycleTimeout();
                 }
@@ -119,7 +116,7 @@ public class Controller {
                         && TflowIn - TflowOut > LARGE_FLOW_DELTA_THRESHOLD) {
                     // Prefer small boiler to avoid growth of Legionella
                     // So, do nothing now
-                } else if (stateStartTflowOut + CONTROL_SWAP_BOILER_TEMP_RISE < TflowOut) {
+                } else if (stateStartTflowOut + SWAP_BOILER_TEMP_RISE < TflowOut) {
                     //Time to switch to another boiler
                     if (currentState == SolarState.boiler200) {
                         stateLargeBoiler();
@@ -127,7 +124,7 @@ public class Controller {
                         stateSmallBoiler();
                     }
                 }
-                // Do nothing while heat is exchanged
+                // Do nothing, let the current boiler heat up
             } else {
                 // Do something, heat is extracted from the boiler now
                 if (currentState == SolarState.boiler200) {

@@ -41,16 +41,16 @@ public class FluxLogger implements Closeable {
 
     public FluxLogger log() {
         jedis = new Jedis("localhost");
-        logState();
         logTemperatures();
         sunLogger();
+        logControl();
         jedis.close();
         return this;
     }
 
     private void logTemperatures() {
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
-            String line = sensorLocation + '.' + "temperature ";
+            String line = sensorLocation + ".temperature ";
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
                 if (jedis.exists(key)) {
@@ -68,15 +68,14 @@ public class FluxLogger implements Closeable {
         }
     }
 
-    private void logState() {
-        if (jedis.exists("solarState")) {
-            send("solarstate,circuit=" + jedis.get("solarState") + " value=1");
-        } else {
-            LogstashLogger.INSTANCE.message("ERROR: there is no SolarState in Redis");
-        }
-        if (jedis.exists("solarStateReal")) {
-            send("solarstate.real,circuit=" + jedis.get("solarStateReal") + " value=1");
-        }
+    private void logControl() {
+        String line = "solarcontrol state="
+                + (jedis.exists("solarState") ? jedis.get("solarState") : "unavailable");
+        line += "realstate=" + (jedis.exists("solarStateReal") ? jedis.get("solarStateReal") : "unavailable");
+        line += ",startTflowOut=" + jedis.get("stateStartTflowOut");
+        line += " value=1";
+
+        send(line);
     }
 
     private void sunLogger() {
