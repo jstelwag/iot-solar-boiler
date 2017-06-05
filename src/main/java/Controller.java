@@ -44,8 +44,9 @@ public class Controller {
     private final Jedis jedis;
 
     private double TflowIn, TflowOut, stateStartTflowOut;
+    private Double Ttop200 = null;
 
-    private final static int STATE_CHANGE_GRACE_MILLISECONDS = 60*1000;
+    private final static int STATE_CHANGE_GRACE_MILLISECONDS = 2*60*1000;
 
     private final static double MAX_FLOWOUT_TEMP = 95.0;
     private final static double LEGIONELLA_TEMP = 60.0;
@@ -112,10 +113,15 @@ public class Controller {
                 }
             } else if (TflowIn > TflowOut + MIN_FLOW_DELTA) {
                 // Heat is being exchanged now, what to do?
+                // Heat up 'legionella smart'
                 if (currentState == SolarState.boiler200 && TflowOut < LEGIONELLA_TEMP
                         && TflowIn - TflowOut > LARGE_FLOW_DELTA_THRESHOLD) {
                     // Prefer small boiler to avoid growth of Legionella
                     // So, do nothing now
+                } else if (currentState == SolarState.boiler500 && Ttop200 != null && Ttop200 > LEGIONELLA_TEMP
+                        && TflowOut < LEGIONELLA_TEMP && TflowIn - TflowOut > LARGE_FLOW_DELTA_THRESHOLD) {
+                    // Prefer to stick to the large boiler to reach Legionella entirely bcs the small boiler is already
+                    // at a clean temperature
                 } else if (stateStartTflowOut + SWAP_BOILER_TEMP_RISE < TflowOut) {
                     //Time to switch to another boiler
                     if (currentState == SolarState.boiler200) {
@@ -178,6 +184,11 @@ public class Controller {
         }
         if (jedis.exists("stateStartTflowOut")) {
             stateStartTflowOut = Double.parseDouble(jedis.get("stateStartTflowOut"));
+        }
+        if (jedis.exists("boiler200.temperature")) {
+            Ttop200 = Double.parseDouble(jedis.get("boiler200.temperature"));
+        } else {
+            Ttop200 = null;
         }
     }
 
