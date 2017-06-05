@@ -71,7 +71,7 @@ public class FluxLogger implements Closeable {
     private void logControl() {
         String line = "solarcontrol state="
                 + (jedis.exists("solarState") ? jedis.get("solarState") : "unavailable");
-        line += "realstate=" + (jedis.exists("solarStateReal") ? jedis.get("solarStateReal") : "unavailable");
+        line += ",realstate=" + (jedis.exists("solarStateReal") ? jedis.get("solarStateReal") : "unavailable");
         line += ",startTflowOut=" + jedis.get("stateStartTflowOut");
         line += " value=1";
 
