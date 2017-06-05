@@ -50,6 +50,7 @@ public class Controller {
 
     private final static double MAX_FLOWOUT_TEMP = 95.0;
     private final static double LEGIONELLA_TEMP = 60.0;
+    private final static double MAX_SMALL_BOILER_TEMP = 70.0;
 
     private final static long OVERHEAT_TIMEOUT_MS = 30*60*1000; //Set to 30 minutes
 
@@ -73,7 +74,8 @@ public class Controller {
         }
         readTemperatures();
         pipeTSlope();
-        overheatCheck();
+        overheatControl();
+        smallBoilerHeatControl();
         if (defrostCheck()) {
             stateDefrost();
         }
@@ -83,7 +85,7 @@ public class Controller {
         } else if (!new Sun().shining()) {
             stateSunset();
         } else if (currentState == SolarState.overheat) {
-            overheatControl();
+            resetOverheat();
         } else {
             control();
         }
@@ -147,13 +149,21 @@ public class Controller {
         }
     }
 
-    private void overheatCheck() {
+    private void overheatControl() {
         if (TflowOut > MAX_FLOWOUT_TEMP) {
             stateOverheat();
         }
     }
 
-    private void overheatControl() {
+    /** From the small boiler water exits to the user. The Tout temperature must be limited */
+    private void smallBoilerHeatControl() {
+        if (currentState == SolarState.boiler200 && Ttop200 != null && Ttop200 > MAX_SMALL_BOILER_TEMP) {
+            LogstashLogger.INSTANCE.message("Switching off small boiler to prevent overheated user water");
+            stateLargeBoiler();
+        }
+    }
+
+    private void resetOverheat() {
         if (new Date().getTime() - Long.valueOf(jedis.get("lastStateChange")) > OVERHEAT_TIMEOUT_MS) {
             LogstashLogger.INSTANCE.message("Ending overheat status, switching to boiler500");
             stateLargeBoiler();
