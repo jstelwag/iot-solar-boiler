@@ -173,7 +173,7 @@ public class Controller {
     private boolean defrostCheck() {
         Calendar now = Calendar.getInstance();
         //TODO implement logic
-        return false; //now.get(Calendar.HOUR) < 7;
+        return now.get(Calendar.HOUR) < 7;
     }
 
     private void checkDefrost() {
