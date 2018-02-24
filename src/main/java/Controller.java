@@ -171,9 +171,21 @@ public class Controller {
     }
 
     private boolean defrostCheck() {
+
+        if (jedis.exists("auxiliary.temperature")) {
+            return Double.parseDouble(jedis.get("auxiliary.temperature")) < 0.0;
+        }
+
+        return isWinter();
+    }
+
+    private boolean isWinter() {
         Calendar now = Calendar.getInstance();
-        //TODO implement logic
-        return now.get(Calendar.HOUR) < 7;
+        return (now.get(Calendar.MONTH) == Calendar.NOVEMBER
+                || now.get(Calendar.MONTH) == Calendar.DECEMBER
+                || now.get(Calendar.MONTH) == Calendar.JANUARY)
+                && now.get(Calendar.HOUR_OF_DAY) < 7
+                && now.get(Calendar.HOUR_OF_DAY) > 21;
     }
 
     private void checkDefrost() {
