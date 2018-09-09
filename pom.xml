@@ -73,6 +73,13 @@
             <version>3.2</version>
         </dependency>
         <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20140107</version>
+            <!-- Latest version is for JDK 1.8 and higher
+            <version>20141113</version>-->
+        </dependency>
+        <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>fluent-hc</artifactId>
             <version>4.5.2</version>
@@ -91,6 +98,13 @@
             <groupId>org.rxtx</groupId>
             <artifactId>rxtx</artifactId>
             <version>2.1.7</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.eclipse.jetty/jetty-server -->
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-server</artifactId>
+            <version>9.4.12.v20180830</version>
         </dependency>
     </dependencies>
 </project>
