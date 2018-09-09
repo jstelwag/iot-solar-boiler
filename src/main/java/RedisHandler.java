@@ -28,6 +28,7 @@ public class RedisHandler extends AbstractHandler {
 
         JSONArray redisResponse = new JSONArray();
         for (String key : all) {
+            if (!"pipe.TflowSet".equals(key))
             redisResponse.put(new JSONObject()
                     .put("key", key)
                     .put("value", jedis.get(key))
