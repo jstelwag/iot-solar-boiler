@@ -12,7 +12,7 @@ public class Main {
         try {
             switch (args[0]) {
                 case "http":
-                    startHttp(9000);
+                    startHttp(8000);
                 case "FluxLogger":
                     new FluxLogger().log().close();
                     break;
