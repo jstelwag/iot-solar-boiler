@@ -19,7 +19,7 @@ import java.util.List;
 public class RedisHandler extends AbstractHandler {
     @Override
     public void handle(String s, Request request, HttpServletRequest httpServletRequest, HttpServletResponse response)
-            throws IOException, ServletException {
+            throws IOException {
         System.out.println("Redis request");
 
         Jedis jedis = new Jedis("localhost");
@@ -28,11 +28,11 @@ public class RedisHandler extends AbstractHandler {
 
         JSONArray redisResponse = new JSONArray();
         for (String key : all) {
-            if (!"pipe.TflowSet".equals(key))
-            redisResponse.put(new JSONObject()
-                    .put("key", key)
+            if (!"pipe.TflowSet".equals(key)) {
+                redisResponse.put(new JSONObject().put(key, new JSONObject()
                     .put("value", jedis.get(key))
-                    .put("ttl", jedis.ttl(key)));
+                    .put("ttl", jedis.ttl(key))));
+            }
         }
 
         IOUtils.closeQuietly(jedis);

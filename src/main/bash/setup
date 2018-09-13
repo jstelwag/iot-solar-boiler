@@ -63,6 +63,34 @@ EOF
 sudo mv iot-furnace /usr/local/bin
 sudo chmod +x /usr/local/bin/iot-furnace
 
+cat <<EOF >http-listener.service
+[Unit]
+Description=Java HTTP listener Service
+[Service]
+User=pi
+# The configuration file application.properties should be here:
+#change this to your workspace
+WorkingDirectory=/home/pi
+#path to executable.
+#executable is a bash script which calls jar file
+ExecStart=/usr/local/bin/iot-solar http
+SuccessExitStatus=143
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo mv http-listener.service /etc/systemd/system/
+
+sudo systemctl daemon-reload
+sudo systemctl enable http-listener.service
+sudo systemctl start http-listener
+sudo systemctl status http-listener
+
+
+
 iot-upgrade
 
 sudo nano /etc/iot.conf
