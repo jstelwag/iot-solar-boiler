@@ -20,8 +20,6 @@ public class RedisHandler extends AbstractHandler {
     @Override
     public void handle(String s, Request request, HttpServletRequest httpServletRequest, HttpServletResponse response)
             throws IOException {
-        System.out.println("Redis request");
-
         Jedis jedis = new Jedis("localhost");
         List<String> all = new ArrayList<>(jedis.keys("*"));
         Collections.sort(all);

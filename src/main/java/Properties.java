@@ -18,7 +18,8 @@ public class Properties {
             inputStream = new FileInputStream("/etc/iot.conf");
             prop.load(inputStream);
         } catch (IOException e) {
-            LogstashLogger.INSTANCE.message("ERROR: can not load /etc/iot.conf " + e.toString());
+            System.out.println("Cannot load /etc/iot.conf " + e.toString());
+            LogstashLogger.INSTANCE.fatal("Cannot load /etc/iot.conf " + e.toString());
         } finally {
             IOUtils.closeQuietly(inputStream);
         }

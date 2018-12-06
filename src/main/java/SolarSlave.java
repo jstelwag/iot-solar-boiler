@@ -40,7 +40,7 @@ public class SolarSlave implements SerialPortEventListener {
         jedis = new Jedis("localhost");
 
         if (jedis.exists(STARTTIME)) {
-            LogstashLogger.INSTANCE.message("Exiting redundant SolarSlave");
+            LogstashLogger.INSTANCE.info("Exiting redundant SolarSlave");
             jedis.close();
             System.exit(0);
         }
@@ -64,7 +64,7 @@ public class SolarSlave implements SerialPortEventListener {
             }
         }
         if (portId == null) {
-            LogstashLogger.INSTANCE.message("ERROR: could not find USB at " + prop.prop.getProperty("usb.solar"));
+            LogstashLogger.INSTANCE.error("Could not find USB at " + prop.prop.getProperty("usb.solar"));
             return;
         }
 
@@ -156,17 +156,17 @@ public class SolarSlave implements SerialPortEventListener {
                         }
                         serialPort.getOutputStream().flush();
                     } catch (IOException e) {
-                        LogstashLogger.INSTANCE.message("ERROR: writing to solar controller");
+                        LogstashLogger.INSTANCE.error("Failed writing to solar controller");
                         close();
                         System.exit(0);
                     }
                 } else if (inputLine.startsWith("log:")) {
                     LogstashLogger.INSTANCE.message("iot-solar-controller", inputLine.substring(4).trim());
                 } else {
-                    LogstashLogger.INSTANCE.message("ERROR: received garbage from the Solar micro controller: " + inputLine);
+                    LogstashLogger.INSTANCE.error("Received garbage from the Solar micro controller: " + inputLine);
                 }
             } catch (IOException e) {
-                LogstashLogger.INSTANCE.message("ERROR: problem reading serial input from USB,i will kill myself" + e.toString());
+                LogstashLogger.INSTANCE.error("Problem reading serial input from USB,i will kill myself" + e.toString());
                 close();
                 System.exit(0);
             }
@@ -175,7 +175,7 @@ public class SolarSlave implements SerialPortEventListener {
     }
 
     public void run() {
-        LogstashLogger.INSTANCE.message("Starting SolarSlave");
+        LogstashLogger.INSTANCE.info("Starting SolarSlave");
         Thread t = new Thread() {
             public void run() {
                 try {

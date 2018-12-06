@@ -12,7 +12,7 @@ public class Main {
         try {
             switch (args[0]) {
                 case "http":
-                    startHttp(8000);
+                    startHttp(8080);
                 case "FluxLogger":
                     new FluxLogger().log().close();
                     break;
@@ -23,16 +23,16 @@ public class Main {
                     new SolarSlave().run();
                     break;
                 default:
-                    LogstashLogger.INSTANCE.message("ERROR: unknown parameter for Main " + args[0]);
+                    LogstashLogger.INSTANCE.error("Unknown parameter for Main " + args[0]);
                     break;
             }
         } catch (Exception e) {
-            LogstashLogger.INSTANCE.message("ERROR: " + args[0] + " has finished with unhandled exception " + e.toString());
+            LogstashLogger.INSTANCE.error(args[0] + " has finished with unhandled exception " + e.toString());
         }
     }
 
     private static void startHttp(int port) {
-        LogstashLogger.INSTANCE.message("start http");
+        LogstashLogger.INSTANCE.info("Starting http");
 
         Server httpServer = new Server(port);
         httpServer.setHandler(contexts());
@@ -44,7 +44,7 @@ public class Main {
             httpServer.start();
             httpServer.join();
         } catch (Exception e) {
-            LogstashLogger.INSTANCE.message("FATAL: failed to start http listener " + e.toString());
+            LogstashLogger.INSTANCE.fatal("Failed to start http listener " + e.toString());
             System.out.println(e.toString());
             System.exit(0);
         }
@@ -57,7 +57,7 @@ public class Main {
             try {
                 //hello
             } catch (RuntimeException e) {
-                LogstashLogger.INSTANCE.message("ERROR: exception occurred at the regular speaker scheduling " + e.toString());
+                LogstashLogger.INSTANCE.error("Exception occurred at the regular speaker scheduling " + e.toString());
                 e.printStackTrace();
             }
         }

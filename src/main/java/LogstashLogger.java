@@ -22,6 +22,22 @@ public class LogstashLogger {
         }
     }
 
+    public void fatal(String message) {
+        message("FATAL:" + message);
+    }
+
+    public void error(String message) {
+        message("ERROR:" + message);
+    }
+
+    public void warn(String message) {
+        message("WARN:" + message);
+    }
+
+    public void info(String message) {
+        message("INFO:" + message);
+    }
+
     public void message(String line) {
         message("iot-solar-boiler", line);
     }

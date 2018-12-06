@@ -141,7 +141,7 @@ public class Controller {
                 } else if (currentState == SolarState.boiler500) {
                     stateRecycle();
                 } else {
-                    LogstashLogger.INSTANCE.message("ERROR: Unexpected solar state " + currentState
+                    LogstashLogger.INSTANCE.error("Unexpected solar state " + currentState
                             + " I will go into recycle mode");
                     stateRecycle();
                 }
@@ -158,14 +158,14 @@ public class Controller {
     /** From the small boiler water exits to the user. The Tout temperature must be limited */
     private void smallBoilerHeatControl() {
         if (currentState == SolarState.boiler200 && Ttop200 != null && Ttop200 > MAX_SMALL_BOILER_TEMP) {
-            LogstashLogger.INSTANCE.message("Switching off small boiler to prevent overheated user water");
+            LogstashLogger.INSTANCE.info("Switching off small boiler to prevent overheated user water");
             stateLargeBoiler();
         }
     }
 
     private void resetOverheat() {
         if (new Date().getTime() - Long.valueOf(jedis.get("lastStateChange")) > OVERHEAT_TIMEOUT_MS) {
-            LogstashLogger.INSTANCE.message("Ending overheat status, switching to boiler500");
+            LogstashLogger.INSTANCE.info("Ending overheat status, switching to boiler500");
             stateLargeBoiler();
         }
     }
@@ -190,7 +190,7 @@ public class Controller {
 
     private void checkDefrost() {
         if (!defrostCheck()) {
-            LogstashLogger.INSTANCE.message("Ending defrost status, switching to startup");
+            LogstashLogger.INSTANCE.info("Ending defrost status, switching to startup");
             stateStartup();
         }
     }
@@ -201,7 +201,7 @@ public class Controller {
             TflowOut = Double.parseDouble(jedis.get("pipe.TflowOut"));
         } else {
             stateError(); //avoid overheating the pump, shut everything down
-            LogstashLogger.INSTANCE.message("ERROR: no temperature readings available, going into error state");
+            LogstashLogger.INSTANCE.error("No temperature readings available, going into error state");
             throw new IOException("No control temperature available");
         }
         if (jedis.exists("stateStartTflowOut")) {
@@ -218,7 +218,7 @@ public class Controller {
         jedis.set("solarState", SolarState.startup.name());
         //Take some extra time to smooth out early morning temperature swings.
         jedis.set("lastStateChange", String.valueOf(new Date().getTime() + 10*60*1000));
-        LogstashLogger.INSTANCE.message("Going into startup state");
+        LogstashLogger.INSTANCE.info("Going into startup state");
         resetTSlope();
     }
 
@@ -226,7 +226,7 @@ public class Controller {
         jedis.set("solarState", SolarState.recycle.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
-        LogstashLogger.INSTANCE.message("Going into recycle state");
+        LogstashLogger.INSTANCE.info("Going into recycle state");
         resetTSlope();
     }
 
@@ -234,7 +234,7 @@ public class Controller {
         jedis.set("solarState", SolarState.recycleTimeout.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
-        LogstashLogger.INSTANCE.message("Going into recycle timeout state");
+        LogstashLogger.INSTANCE.info("Going into recycle timeout state");
         resetTSlope();
     }
 
@@ -242,7 +242,7 @@ public class Controller {
         jedis.set("solarState", SolarState.boiler500.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
-        LogstashLogger.INSTANCE.message("Switching to boiler500");
+        LogstashLogger.INSTANCE.info("Switching to boiler500");
         resetTSlope();
     }
 
@@ -250,7 +250,7 @@ public class Controller {
         jedis.set("solarState", SolarState.boiler200.name());
         jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
         jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
-        LogstashLogger.INSTANCE.message("Switching to boiler200");
+        LogstashLogger.INSTANCE.info("Switching to boiler200");
         resetTSlope();
     }
 
@@ -263,7 +263,7 @@ public class Controller {
             if (jedis.exists("stateStartTflowOut")) {
                 jedis.del("stateStartTflowOut");
             }
-            LogstashLogger.INSTANCE.message("Going into error state");
+            LogstashLogger.INSTANCE.info("Going into error state");
             resetTSlope();
         }
     }
@@ -273,7 +273,7 @@ public class Controller {
             jedis.set("solarState", SolarState.overheat.name());
             jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
             jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
-            LogstashLogger.INSTANCE.message("Going into overheat state");
+            LogstashLogger.INSTANCE.info("Going into overheat state");
             resetTSlope();
         }
     }
@@ -283,7 +283,7 @@ public class Controller {
             jedis.set("solarState", SolarState.defrost.name());
             jedis.set("lastStateChange", String.valueOf(new Date().getTime()));
             jedis.set("stateStartTflowOut", String.valueOf(TflowOut));
-            LogstashLogger.INSTANCE.message("Going into defrost state");
+            LogstashLogger.INSTANCE.info("Going into defrost state");
             resetTSlope();
         }
     }
@@ -291,7 +291,7 @@ public class Controller {
     private void stateSunset() {
         if (currentState != SolarState.sunset) {
             jedis.set("solarState", SolarState.sunset.name());
-            LogstashLogger.INSTANCE.message("Going into sunset state, " + new Sun());
+            LogstashLogger.INSTANCE.info("Going into sunset state, " + new Sun());
             if (jedis.exists("lastStateChange")) {
                 jedis.del("lastStateChange"); //this will force system to startup at new state change
             }
@@ -317,304 +317,15 @@ public class Controller {
                 jedis.setex("pipe.TstandardDeviation", Properties.redisExpireSeconds
                         , String.valueOf(regression.getSlopeStdErr()));
             } else {
-                LogstashLogger.INSTANCE.message("Not enough recent observations (" + regression.getN()
+                LogstashLogger.INSTANCE.info("Not enough recent observations (" + regression.getN()
                         + ") for slope calculation");
             }
         } else {
-            LogstashLogger.INSTANCE.message("Not yet enough observations for slope calculation");
+            LogstashLogger.INSTANCE.info("Not yet enough observations for slope calculation");
         }
     }
 
     private void resetTSlope() {
         jedis.del("pipe.TflowSet");
     }
-
-
-/*
-    float setpoint = 0.0;
-    float STAGE_ONE_TEMP = 40.0;
-    float STAGE_TWO_TEMP = 65.0;
-    float STAGE_THREE_TEMP = 80.0;
-    float BALANCED_INCREASE_TEMP = 5.0;
-    const float COOLING_DOWN_MARGIN = 0.5;
-
-    // ===== North range, VCC: green/white, GND: green
-// Tlh, boiler L, high thermometer
-    DeviceAddress sensorAddressTlh = {0x28, 0x39, 0x28, 0x8E, 0x5, 0x0, 0x0, 0x5A};
-    // Tlm, boiler L, middle thermometer
-    DeviceAddress sensorAddressTlm = {0x28, 0xF4, 0x13, 0x8D, 0x5, 0x0, 0x0, 0xF3};
-    // Tll, boiler L, low thermometer
-    DeviceAddress sensorAddressTll = {0x28, 0xFA, 0x5F, 0x8D, 0x5, 0x0, 0x0, 0x28};
-    float sensorTlh, sensorTlm, sensorTll;
-
-// ===== South range, VCC: orange/white, GND: orange
-
-    // Tsl, boiler S, low thermometer
-    DeviceAddress sensorAddressTsl = {0x28, 0xC0, 0x60, 0x8D, 0x5, 0x0, 0x0, 0xE1};
-    float sensorTsl;
-    // Tubes
-// Tin, incoming (hot) tube from collector
-    DeviceAddress sensorAddressTin = {0x28, 0x2D, 0xA6, 0x8D, 0x5, 0x0, 0x0, 0x3C};
-    // Tin, outgoing (cold) tube to collector
-    DeviceAddress sensorAddressTout = {0x28, 0x6, 0xBE, 0x8D, 0x5, 0x0, 0x0, 0x30};
-    float sensorTin, sensorTout;
-
-/** Normally filter out the 85C readings, unless the last temperature was already near 85
-    const float MAX_TEMP_CHANGE_THRESHOLD_85 = 0.2;
-
-// Temperature and control variables
-    const float MAX_SOLAR_TEMP = 100.0; //Max temp and the pump will be switched off
-    const float MAX_SOLAR_THRESHOLD = 5.0; //Threshold temp for the pump to switch back on when the boiler had reached max temp
-    uint32_t noSunPumpStopTime = 0;
-    byte maybeSunRetryCycles = 0;
-    const byte SUN_RETRY_THRESHOLD = 25;
-    const uint32_t PUMP_OFF_NO_SUN_MS = 2800000;
-
-    //Recycle to prevent cooling down boilers
-    long recycleStartTime = 0;
-    float recycleStartTemperature;
-    const uint32_t COOLING_COUNT_TIMEOUT_MS = 2400000;
-//const float MIN_IN_OUT_BIAS = 0.1;
-    const float MIN_RECYCLE_TEMP_RISE = 5.0;
-
-    boolean solarPumpState = false;
-    boolean recyclePumpState = false;
-    boolean solarValveIstate = false;
-    boolean solarValveIIstate = false;
-
-
-    /**
-     * From start first the small boiler is heated up to STAGE_ONE_TEMP. When this temperature is reached
-     * the large boiler is heated to STAGE_ONE_TEMP. Then each  boiler is sequentially increased with BALANCED_INCREASE_TEMP
-     * temperature steps. The main consideration is the efficiency of the solar system decreases with temperature
-     * rising.
-     * TODO: add a low capacity parameter where the large boiler is avoided as long as possible
-     * TODO: add weather forecasting to set the STAGE_ONE_TEMP
-     *
-     * The outflow temperature is used as control sensor because at this point an almost instant reaction to valve changes
-     * can be expected.
-     *
-     * When STAGE_TWO_TEMP is reached the system stops heating the small boiler alltogether. Further heat will be accumulated in
-     * the large boiler until it reaches STAGE_THREE_TEMP and it will go into recycle mode. The pump stops when the STOP_TEMP is
-     * reached.
-     * There is a security override using the large boiler top sensor, when that sensor reaches MAXIMUM_BOILER_TEMP it will switch
-     * to recycle for a set time.
-     *
-     * The heat extraction stops when the temperatre is dropping. This is simply the difference between flowIn and flowOut. If this is
-     * the case for both boilers, the valves are set to recycle mode. Once solar starts to generate heat again it will lead to a rise in
-     * temperature (either flowIn and flowOut, we use flowIn here) the recycling is stopped.
-     *
-     * When the sun has set, or the security override is activated, the solar valve control is disabled.
-     *
-     * The details
-     *
-
-    void solarValveControl() {
-        if (sunset) {
-            // Solar is turned off
-            // do nothing
-        } else if (securityOverride) {
-            // System is stopped to avoid overheating
-        } else if (isSmallBoilerState()) {
-            // Consider
-            // - delta Temp is OK
-            //    - and still belongs to small boiler
-            //    - or exceeds some threshold
-            // - delta Temp is not OK
-            if (sensorTin < sensorTout + COOLING_DOWN_MARGIN) {
-                logger.postUdp("small boiler cooling down");
-                if (sensorTout > sensorTlm) {
-                    largeBoilerOn();
-                    setpoint = 0.0;
-                } else {
-                    recycleOn();
-                    setpoint = 0.0;
-                }
-            } else {
-                // Boiler is heating up
-                // First determine the setpoint
-                if (setpoint == 0.0) {
-                    if (sensorTout > STAGE_TWO_TEMP) {
-                        // break out from small boiler mode
-                        logger.postUdp("small boiler reached max");
-                        setpoint = 0.0;
-                    } else if (sensorTout < STAGE_ONE_TEMP) {
-                        setpoint = STAGE_ONE_TEMP;
-                    } else {
-                        setpoint = sensorTout + BALANCED_INCREASE_TEMP;
-                    }
-                    logger.writeUdp("setpoint: ");
-                    logger.writeUdp(setpoint);
-                    logger.postUdp();
-                }
-                // And perform the control action
-                if (sensorTout > setpoint) {
-                    logger.postUdp("small boiler reached setpoint");
-                    largeBoilerOn();
-                    setpoint = 0.0;
-                }
-                // else: keep heating up this boiler
-            }
-        } else if (isLargeBoilerState()) {
-            if (sensorTin < sensorTout + COOLING_DOWN_MARGIN) {
-                // In a cooling down situation do not switch back to the small boiler to avoid switching
-                // back and forth small and large until both are the same low temperature
-                logger.postUdp("large boiler cooling down");
-                recycleOn();
-                setpoint = 0.0;
-            } else {
-                // Boiler is heating up
-                // First determine the setpoint
-                if (setpoint == 0.0) {
-                    if (sensorTout < STAGE_ONE_TEMP) {
-                        setpoint = STAGE_ONE_TEMP;
-                    } else if (sensorTout > STAGE_TWO_TEMP - BALANCED_INCREASE_TEMP) {
-                        setpoint = STAGE_THREE_TEMP;
-                    } else {
-                        setpoint = sensorTout + BALANCED_INCREASE_TEMP;
-                    }
-                    logger.writeUdp("setpoint: ");
-                    logger.writeUdp(setpoint);
-                    logger.postUdp();
-                }
-
-                // And perform the control action
-                if (sensorTout > STAGE_THREE_TEMP) {
-                    logger.postUdp("large boiler reached max");
-                    recycleOn();
-                    setpoint = 0.0;
-                } else if (sensorTout > setpoint) {
-                    logger.postUdp("large boiler reached setpoint");
-                    smallBoilerOn();
-                    setpoint = 0.0;
-                }
-                // else: keep heating up this boiler
-            }
-        } else if (isRecycleState()) {
-            // When the temperature is rising, switch be to small boiler
-            if (sensorTout > recycleStartTemperature + MIN_RECYCLE_TEMP_RISE) {
-                logger.postUdp("Recycle temp has been rising");
-                largeBoilerOn();
-            } else if (millis() > recycleStartTime + COOLING_COUNT_TIMEOUT_MS || millis() < recycleStartTime) {
-                logger.postUdp("Recycle time has passed");
-                largeBoilerOn();
-            }
-//Todo add max temp thingy
-        } else {
-            logger.postUdp("FAILURE: entered unknown mode");
-        }
-    }
-
-    void setValves() {
-        digitalWrite(SOLAR_VALVE_I_RELAY_PIN, !solarValveIstate);
-        digitalWrite(SOLAR_VALVE_II_RELAY_PIN, !solarValveIIstate);
-    }
-
-    void smallBoilerOn() {
-        if (isSmallBoilerState()) {
-            //Valves are already switched to the small boiler
-        } else {
-            solarValveIstate = true;
-            solarValveIIstate = false;
-            setValves();
-            logger.postUdp("valve: small boiler");
-            delay(30000); // Let things settle before doing the next reading
-        }
-    }
-    boolean isSmallBoilerState() {
-        return solarValveIstate && !solarValveIIstate;
-    }
-
-    void largeBoilerOn() {
-        if (isLargeBoilerState()) {
-            //Valves are already switched to the large boiler
-        } else {
-            solarValveIstate = false;
-            //solarValveIIstate has no function here, so keeping it as it is.
-            setValves();
-            logger.postUdp("valve: large boiler");
-            delay(30000); // Let things settle before doing the next reading
-        }
-    }
-    boolean isLargeBoilerState() {
-        return !solarValveIstate;
-    }
-
-    void recycleOn() {
-        if (isRecycleState()) {
-            //Valves are already switched to recycle mode
-        } else {
-            solarValveIstate = true;
-            solarValveIIstate = true;
-            maybeSunRetryCycles = 1;
-            setValves();
-            logger.postUdp("valve: recycle");
-            recycleStartTime = millis();
-            recycleStartTemperature = sensorTin;
-        }
-    }
-    boolean isRecycleState() {
-        return solarValveIstate && solarValveIIstate;
-    }
-
-    /**
-     * Switches off the solar pump when the temperature gets too high
-     * TODO add logic to turn off pump when the sun is not shining
-
-    void solarPumpControl() {
-        if (sensorTin > MAX_SOLAR_TEMP) {
-            if (solarPumpState) {
-                logger.postUdp("max temp: pump off");
-                switchSolarPump(FALSE);
-            }
-        } else {
-            if (solarPumpState) {
-                if (maybeSunRetryCycles != 0) {
-                    if (maybeSunRetryCycles == SUN_RETRY_THRESHOLD) {
-                        maybeSunRetryCycles = 0;
-                    } else {
-                        maybeSunRetryCycles++;
-                        logger.postUdp("maybe sun: flush pipe");
-                    }
-                }
-
-                //When in recycle mode turn off the pump
-                if (maybeSunRetryCycles == 0 && isRecycleState()) {
-                    logger.postUdp("no sun: pump off");
-                    switchSolarPump(FALSE);
-                    noSunPumpStopTime = millis();
-                }
-            } else {
-                if (noSunPumpStopTime > 0) {
-                    // Turn the pump back on after some time
-                    if (noSunPumpStopTime > millis() || noSunPumpStopTime + PUMP_OFF_NO_SUN_MS < millis()) {
-                        noSunPumpStopTime = 0;
-                        switchSolarPump(TRUE);
-                        maybeSunRetryCycles = 1;
-                        logger.postUdp("maybe sun: pump on");
-                    }
-                } else if (sensorTin < (MAX_SOLAR_TEMP - MAX_SOLAR_THRESHOLD)) {
-                    logger.postUdp("max temp: pump on");
-                    switchSolarPump(TRUE);
-                }
-            }
-        }
-    }
-
-
-    /**
-     * Filters typical sensor failure at 85C and -127C
-
-    float filterSensorTemp(float rawSensorTemp, float currentTemp) {
-        if (rawSensorTemp == 85.0 && (abs(rawSensorTemp - 85) > MAX_TEMP_CHANGE_THRESHOLD_85)) {
-            logger.postUdp("warn: 85.0 C sensor");
-            return currentTemp;
-        } else if (rawSensorTemp == -127.0) {
-            logger.postUdp("warn: -127.0 C sensor");
-            return currentTemp;
-        } else {
-            return rawSensorTemp;
-        }
-    }
-    */
 }
