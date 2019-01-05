@@ -22,6 +22,7 @@ public class FluxLogger implements Closeable {
             LogstashLogger.INSTANCE.error("Influx.ip setting missing from properties");
             throw new UnknownHostException("Please set up influx.ip and port in iot.conf");
         }
+
         try {
             host = InetAddress.getByName(properties.prop.getProperty("influx.ip"));
             port = Integer.parseInt(properties.prop.getProperty("influx.port"));
@@ -50,17 +51,20 @@ public class FluxLogger implements Closeable {
 
     private void logTemperatures() {
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
-            String line = sensorLocation + ".temperature ";
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {
                 String key = sensorLocation + '.' + sensorPosition;
                 if (jedis.exists(key)) {
-                    line += (line.contains("=") ? "," : "") + sensorPosition + '=' + jedis.get(key);
+                    String line;
+                    if (sensorLocation.startsWith("boiler")) {
+                        line = "boiler,name=" + sensorLocation + ",position=" + sensorPosition
+                                + " temperature=" + jedis.get(key);
+                    } else {
+                        line = sensorLocation + ".temperature " + sensorPosition + "=" + jedis.get(key);
+                    }
+                    send(line);
                 } else {
                     LogstashLogger.INSTANCE.warn("No temperature for " + key);
                 }
-            }
-            if (line.contains("=")) {
-                send(line);
             }
         }
         if (jedis.exists("pipe.Tslope")) {
