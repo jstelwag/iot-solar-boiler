@@ -220,14 +220,16 @@ public class Controller {
             Tbottem500 = Double.parseDouble(jedis.get("boiler500.Tbottom"));
         } else {
             Tbottem500 = null;
+            LogstashLogger.INSTANCE.warn("Boiler temperature boiler500.Tbottom not available");
         }
         if (jedis.exists("stateStartTflowOut")) {
             stateStartTflowOut = Double.parseDouble(jedis.get("stateStartTflowOut"));
         }
-        if (jedis.exists("boiler200.temperature")) {
-            Ttop200 = Double.parseDouble(jedis.get("boiler200.temperature"));
+        if (jedis.exists("boiler200.Ttop")) {
+            Ttop200 = Double.parseDouble(jedis.get("boiler200.Ttop"));
         } else {
             Ttop200 = null;
+            LogstashLogger.INSTANCE.warn("Boiler temperature boiler200.Ttop not available");
         }
     }
 
