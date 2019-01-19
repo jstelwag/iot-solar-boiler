@@ -45,6 +45,7 @@ public class Controller {
 
     private double TflowIn, TflowOut, stateStartTflowOut;
     private Double Ttop200 = null;
+    private Double Tbottem500 = null;
 
     private final static int STATE_CHANGE_GRACE_MILLISECONDS = 2*60*1000;
 
@@ -62,6 +63,7 @@ public class Controller {
     private final static double MIN_FLOW_DELTA = 0.5;
     private final static double LARGE_FLOW_DELTA_THRESHOLD = 2.0; //Meaning, sun is shining strong
     private final static double MIN_SOLAR_PIPE_TEMP = 20.0;
+    private final static double BOILER_TEMP_CONTROL_OFFSET = 5.0; //use boiler temp for control if temp diff is larger then offset
 
     public final static double SLOPE_WINDOW_HR = 0.5;
     public final static int MIN_OBSERVATIONS = 20;
@@ -107,11 +109,15 @@ public class Controller {
                     stateRecycleTimeout();
                 }
             } else if (currentState == SolarState.recycle) {
-                if (TflowOut > stateStartTflowOut + 4.0 && TflowIn > MIN_SOLAR_PIPE_TEMP) {
+                if (TflowOut > (stateStartTflowOut + 4.0) && TflowIn > MIN_SOLAR_PIPE_TEMP) {
                     // Recycle is heating up, try again
                     stateLargeBoiler();
                 } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
-                    stateRecycleTimeout();
+                   if (Tbottem500 != null && TflowIn > (Tbottem500 + BOILER_TEMP_CONTROL_OFFSET)) {
+                       stateLargeBoiler();
+                   } else {
+                       stateRecycleTimeout();
+                   }
                 }
                 //TODO consider to check if flow temp is higher then boiler temp to switch to boiler
             } else if (currentState == SolarState.recycleTimeout) {
@@ -208,6 +214,12 @@ public class Controller {
             stateError(); //avoid overheating the pump, shut everything down
             LogstashLogger.INSTANCE.error("No temperature readings available, going into error state");
             throw new IOException("No control temperature available");
+        }
+
+        if (jedis.exists("boiler500.Tbottom")) {
+            Tbottem500 = Double.parseDouble(jedis.get("boiler500.Tbottom"));
+        } else {
+            Tbottem500 = null;
         }
         if (jedis.exists("stateStartTflowOut")) {
             stateStartTflowOut = Double.parseDouble(jedis.get("stateStartTflowOut"));
