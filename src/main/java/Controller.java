@@ -61,6 +61,7 @@ public class Controller {
     private final static double SWAP_BOILER_TEMP_RISE = 5.0;
     private final static double MIN_FLOW_DELTA = 0.5;
     private final static double LARGE_FLOW_DELTA_THRESHOLD = 2.0; //Meaning, sun is shining strong
+    private final static double MIN_SOLAR_PIPE_TEMP = 20.0;
 
     public final static double SLOPE_WINDOW_HR = 0.5;
     public final static int MIN_OBSERVATIONS = 20;
@@ -100,7 +101,11 @@ public class Controller {
             stateStartup();
         } else if (lastStateChange > STATE_CHANGE_GRACE_MILLISECONDS) {
             if (currentState == SolarState.startup) {
-                stateLargeBoiler();
+                if (TflowIn > MIN_SOLAR_PIPE_TEMP) {
+                    stateLargeBoiler();
+                } else {
+                    stateRecycleTimeout();
+                }
             } else if (currentState == SolarState.recycle) {
                 if (TflowOut > stateStartTflowOut + 4.0) {
                     // Recycle is heating up, try again
