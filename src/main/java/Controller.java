@@ -107,7 +107,7 @@ public class Controller {
                     stateRecycleTimeout();
                 }
             } else if (currentState == SolarState.recycle) {
-                if (TflowOut > stateStartTflowOut + 4.0) {
+                if (TflowOut > stateStartTflowOut + 4.0 && TflowIn > MIN_SOLAR_PIPE_TEMP) {
                     // Recycle is heating up, try again
                     stateLargeBoiler();
                 } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
