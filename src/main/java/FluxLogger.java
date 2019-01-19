@@ -49,6 +49,7 @@ public class FluxLogger implements Closeable {
         return this;
     }
 
+    @Deprecated
     private void logTemperatures() {
         for (String sensorLocation : TemperatureSensor.sensors.keySet()) {
             for (String sensorPosition : TemperatureSensor.sensors.get(sensorLocation)) {

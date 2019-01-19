@@ -12,7 +12,8 @@ public class TemperatureSensor {
 
     static {
         sensors.put("boiler500", new String[]{"Ttop", "Tmiddle", "Tbottom"});
-        sensors.put("boiler200", new String[]{"Ttop"});
+        //boiler200 is logged by the furnace controller
+        //sensors.put("boiler200", new String[]{"Ttop"});
         sensors.put("pipe", new String[]{"TflowIn", "TflowOut"});
     }
 
