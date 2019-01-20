@@ -2,6 +2,7 @@ import net.e175.klaus.solarpositioning.AzimuthZenithAngle;
 import net.e175.klaus.solarpositioning.DeltaT;
 import net.e175.klaus.solarpositioning.SPA;
 
+import java.util.Calendar;
 import java.util.GregorianCalendar;
 
 /**
@@ -12,7 +13,8 @@ public class Sun {
     private final Properties prop;
     private final static double MIN_AZIMUTH = 95.0;
     private final static double MAX_AZIMUTH = 300.0;
-    private final static double MAX_ZENITH = 83.0;
+    private final static double MORNING_ZENITH = 78.0;
+    private final static double EVENINNG_ZENITH = 83.0;
 
     public Sun() {
         prop = new Properties();
@@ -30,16 +32,25 @@ public class Sun {
     }
 
     public boolean shining() {
+        boolean retVal;
         AzimuthZenithAngle position = position();
-        return position.getAzimuth() < MAX_AZIMUTH
-                && position.getAzimuth() > MIN_AZIMUTH
-                && position.getZenithAngle() < MAX_ZENITH;
+        if (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < 12) {
+            retVal = position.getAzimuth() < MAX_AZIMUTH
+                    && position.getAzimuth() > MIN_AZIMUTH
+                    && position.getZenithAngle() < MORNING_ZENITH;
+        } else {
+            retVal = position.getAzimuth() < MAX_AZIMUTH
+                    && position.getAzimuth() > MIN_AZIMUTH
+                    && position.getZenithAngle() < EVENINNG_ZENITH;
+        }
+
+        return retVal;
     }
 
     @Override
     public String toString() {
         AzimuthZenithAngle position = position();
-        return "azimuth: " + position.getAzimuth() + " [" + MIN_AZIMUTH + " <> " + MAX_AZIMUTH + "]" +
-                ", zenith angle: " + position.getZenithAngle() + " [ < " + MAX_ZENITH + "]";
+        return "Sun position azimuth: " + position.getAzimuth() +
+                ", zenith angle: " + position.getZenithAngle() + ", shining: " + shining();
     }
 }
