@@ -13,8 +13,8 @@ public class Sun {
     private final Properties prop;
     private final static double MIN_AZIMUTH = 95.0;
     private final static double MAX_AZIMUTH = 300.0;
-    private final static double MORNING_ZENITH = 78.0;
-    private final static double EVENINNG_ZENITH = 83.0;
+    private final static double MORNING_ZENITH = 79.0;
+    private final static double EVENING_ZENITH = 83.0;
 
     public Sun() {
         prop = new Properties();
@@ -41,7 +41,7 @@ public class Sun {
         } else {
             retVal = position.getAzimuth() < MAX_AZIMUTH
                     && position.getAzimuth() > MIN_AZIMUTH
-                    && position.getZenithAngle() < EVENINNG_ZENITH;
+                    && position.getZenithAngle() < EVENING_ZENITH;
         }
 
         return retVal;

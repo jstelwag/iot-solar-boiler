@@ -181,13 +181,22 @@ public class Controller {
         }
     }
 
+    /**
+     * Weigh both the outside temperature and the pipe temperature.
+     * If no outside temperature is available only check in the winter months
+     * @return true if defrosting is deemed necessary
+     */
     private boolean defrostCheck() {
-
+        double pipeTemperature = TflowIn;
+        if (pipeTemperature > TflowOut) {
+            pipeTemperature = TflowOut;
+        }
         if (jedis.exists("auxiliary.temperature")) {
-            return Double.parseDouble(jedis.get("auxiliary.temperature")) < 0.0;
+            double auxTemperature = Double.parseDouble(jedis.get("auxiliary.temperature"));
+            return pipeTemperature + auxTemperature < 5.0;
         }
 
-        return isWinter();
+        return isWinter() && pipeTemperature < 10.0;
     }
 
     private boolean isWinter() {
