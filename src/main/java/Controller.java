@@ -56,8 +56,13 @@ public class Controller {
     private final static long OVERHEAT_TIMEOUT_MS = 30*60*1000; //Set to 30 minutes
 
     private final static double RECYCLE_MAX_TEMP = 40.0;
-    private final static long RECYCLE_TIMEOUT_ON = 10*60*1000;
-    private final static long RECYCLE_TIMEOUT_OFF = 20*60*1000;
+    /** How many miliseconds should control stay in recycle? */
+    private long recycleTimeMS() {
+        if (isWinter()) {
+            return 30*60*1000;
+        }
+        return 10*60*1000;
+    }
 
     private final static double SWAP_BOILER_TEMP_RISE = 5.0;
     private final static double MIN_FLOW_DELTA = 0.5;
@@ -69,6 +74,10 @@ public class Controller {
     public final static int MIN_OBSERVATIONS = 20;
 
     private SolarState currentState;
+
+    static {
+
+    }
 
     public Controller() throws IOException {
         jedis = new Jedis("localhost");
@@ -112,16 +121,15 @@ public class Controller {
                 if (TflowOut > (stateStartTflowOut + 4.0) && TflowIn > MIN_SOLAR_PIPE_TEMP) {
                     // Recycle is heating up, try again
                     stateLargeBoiler();
-                } else if (lastStateChange > RECYCLE_TIMEOUT_ON && TflowOut < RECYCLE_MAX_TEMP) {
+                } else if (lastStateChange > recycleTimeMS() && TflowOut < RECYCLE_MAX_TEMP) {
                    if (Tbottem500 != null && TflowIn > (Tbottem500 + BOILER_TEMP_CONTROL_OFFSET)) {
                        stateLargeBoiler();
                    } else {
                        stateRecycleTimeout();
                    }
                 }
-                //TODO consider to check if flow temp is higher then boiler temp to switch to boiler
             } else if (currentState == SolarState.recycleTimeout) {
-                if (lastStateChange > RECYCLE_TIMEOUT_OFF) {
+                if (lastStateChange > recycleTimeMS()) {
                     stateRecycle();
                 }
             } else if (TflowIn > TflowOut + MIN_FLOW_DELTA) {
@@ -196,16 +204,21 @@ public class Controller {
             return pipeTemperature + auxTemperature < 5.0;
         }
 
-        return isWinter() && pipeTemperature < 10.0;
+        return isWinterNight() && pipeTemperature < 10.0;
+    }
+
+    private boolean isWinterNight() {
+        Calendar now = Calendar.getInstance();
+        return isWinter()
+                && now.get(Calendar.HOUR_OF_DAY) < 7
+                && now.get(Calendar.HOUR_OF_DAY) > 21;
     }
 
     private boolean isWinter() {
         Calendar now = Calendar.getInstance();
         return (now.get(Calendar.MONTH) == Calendar.NOVEMBER
                 || now.get(Calendar.MONTH) == Calendar.DECEMBER
-                || now.get(Calendar.MONTH) == Calendar.JANUARY)
-                && now.get(Calendar.HOUR_OF_DAY) < 7
-                && now.get(Calendar.HOUR_OF_DAY) > 21;
+                || now.get(Calendar.MONTH) == Calendar.JANUARY);
     }
 
     private void checkDefrost() {
